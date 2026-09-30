@@ -44,5 +44,5 @@ Der Regler „mehr Paare ↔ nur sichere“ verschiebt die Schwelle.
 ## Technik
 
 - `index.html` – die ganze App · `lib/` – pdf-lib 1.17.1, JSZip 3.10.1
-- `sw.js` – Offline-Kopie · `manifest.webmanifest` – Installation als App
+- `sw.js` – Offline-Kopie · `app.webmanifest` – Installation als App
 - Lokal testen: `python -m http.server 8767 --bind 127.0.0.1`, dann `http://localhost:8767`

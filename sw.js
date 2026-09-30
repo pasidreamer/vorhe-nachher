@@ -3,11 +3,11 @@
 // nach 3 Sekunden ohne Antwort die gespeicherte Kopie nehmen.
 // Nach Änderungen an den Dateien: VERSION um eins erhöhen.
 
-const VERSION = 'vorher-nachher-v4';
+const VERSION = 'vorher-nachher-v5';
 const DATEIEN = [
   './',
   './index.html',
-  './manifest.webmanifest',
+  './app.webmanifest',
   './lib/pdf-lib.min.js',
   './lib/jszip.min.js',
   './icons/icon.svg',
