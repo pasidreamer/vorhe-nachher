@@ -3,7 +3,6 @@
   "short_name": "Vorher/Nachher",
   "description": "Vorher-/Nachher-Fotos der Lüftungsreinigung automatisch zuordnen und als Bericht speichern.",
   "lang": "de-CH",
-  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
