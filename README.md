@@ -36,7 +36,7 @@ Der Regler „mehr Paare ↔ nur sichere“ verschiebt die Schwelle.
 
 ## Online-Adresse
 
-**https://pasidreamer.github.io/vorher-nachher/** (GitHub Pages)
+**https://pasidreamer.github.io/vorhe-nachher/** (GitHub Pages)
 
 - `.gitignore` schliesst Fotos, PDFs und ZIPs aus – Kundenfotos kommen nie ins Repository.
 - **Neue Fassung veröffentlichen:** In `sw.js` die `VERSION` hochzählen, committen, `git push`.
