@@ -3,7 +3,7 @@
 // nach 3 Sekunden ohne Antwort die gespeicherte Kopie nehmen.
 // Nach Änderungen an den Dateien: VERSION um eins erhöhen.
 
-const VERSION = 'vorher-nachher-v9';
+const VERSION = 'vorher-nachher-v10';
 const DATEIEN = [
   './',
   './index.html',

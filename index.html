@@ -79,6 +79,10 @@ button { font: inherit; }
 .stern.an { background: var(--accent); border-color: var(--accent); color: #fff; }
 .stern.an svg { fill: #fff; }
 .abschnitt[hidden], #pool[hidden] { display: none; }
+.raus { height: 34px; padding: 0 10px; border: 1px solid #f1c4c4; border-radius: 8px; background: #fff; color: var(--danger);
+  font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.raus svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; }
+.raus:hover { background: #fdecec; }
 .ikon:disabled { opacity: .25; pointer-events: none; }
 .filter { display: inline-flex; margin-left: auto; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-weight: 400; }
 .filter button { border: 0; background: #fff; padding: 7px 12px; font: inherit; font-size: 13px; cursor: pointer; color: var(--muted); }
@@ -166,7 +170,7 @@ dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-hei
   <button class="btn" id="bInstall" hidden><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 8v7M9 12l3 3 3-3"/></svg>Als App installieren</button>
   <div class="spacer"></div>
   <div class="strenge" id="strengeBox" hidden>
-    <span>mehr Paare</span><input type="range" id="strenge" min="0.4" max="2.6" step="0.1" value="1.2"><span>nur sichere</span>
+    <span>mehr Vorschläge</span><input type="range" id="strenge" min="-1" max="2.6" step="0.1" value="0"><span>nur sichere</span>
   </div>
   <button class="btn" id="bNeu" disabled title="Automatische Zuordnung neu berechnen"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span class="lang">Neu&nbsp;</span>zuordnen</button>
   <button class="btn primary" id="bExport" disabled><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Speichern</button>
@@ -773,12 +777,14 @@ function zuordnen() {
     c.rA = rangA[c.a.id] = (rangA[c.a.id] ?? -1) + 1;
     c.rB = rangB[c.b.id] = (rangB[c.b.id] ?? -1) + 1;
   }
+  // Regler links = viele Vorschläge (Pascal sortiert aus), rechts = nur Paare, die klar zusammengehören
+  const rangGrenze = schwelle >= 1.5 ? 1 : schwelle >= 0.8 ? 2 : schwelle >= 0 ? 4 : Infinity;
   const wenige = kand.length < 4; // zu wenige Möglichkeiten für einen statistischen Vergleich
   const vergeben = new Set();
   paare = [];
   for (const c of kand) {
     if (!wenige && c.punkte < schwelle) break;
-    if (c.rA > 1 || c.rB > 1) continue;  // völlig andere Bilder: nicht unter den besten zwei
+    if (c.rA > rangGrenze || c.rB > rangGrenze) continue;  // nur wenn beide Fotos sich gegenseitig weit oben haben
     if (vergeben.has(c.a.id) || vergeben.has(c.b.id)) continue;
     vergeben.add(c.a.id); vergeben.add(c.b.id);
     paare.push({ id: naechsteId++, vorher: c.a.id, nachher: c.b.id, titel: '', punkte: c.punkte });
@@ -792,7 +798,7 @@ function zuordnen() {
     }
     const a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
     const klar = !a.klasse || ((a.klarheit ?? 9) >= 1 && (b.klarheit ?? 9) >= 1) || (a.klasseHand && b.klasseHand);
-    p.status = (p.punkte - alt >= 0.6 && p.punkte >= schwelle + 0.4 && klar) ? 'sicher' : 'pruefen';
+    p.status = (p.punkte - alt >= 0.6 && p.punkte >= 1.6 && klar) ? 'sicher' : 'pruefen';
   }
   sortierePaare();
   geaendert = false;
@@ -865,11 +871,11 @@ function darstellen() {
         <span class="badge ${p.status}">${badge}</span>
         <button class="ikon" data-aktion="gross" title="Gross vergleichen">${SVG.gross}</button>
         <button class="ikon" data-aktion="tauschen" title="Vorher/Nachher tauschen">${SVG.tauschen}</button>
-        <button class="ikon" data-aktion="trennen" title="Paar auflösen">${SVG.trennen}</button>
+        <button class="raus" data-aktion="trennen" title="Kein Paar – beide Fotos zurück zu „Ohne Partner“">${SVG.trennen}Raus</button>
       </div>
       <div class="bilder">${fotoHtml(a, 'vorher')}<div class="zwischen">${SVG.pfeil}${abstand(a, b)}</div>${fotoHtml(b, 'nachher')}</div>
     </div>`;
-  }).join('') || (nurAuswahl ? '<div class="leer">Noch nichts ausgewählt. Bei „Alle Paare“ auf „Auswählen“ tippen.</div>' : '') || '<div class="leer">Noch keine Paare. Tippe zwei Fotos unten nacheinander an, um ein Paar zu bilden – oder schiebe den Regler Richtung „mehr Paare“ und tippe „Neu zuordnen“.</div>';
+  }).join('') || (nurAuswahl ? '<div class="leer">Noch nichts ausgewählt. Bei „Alle Paare“ auf „Auswählen“ tippen.</div>' : '') || '<div class="leer">Noch keine Paare. Tippe zwei Fotos unten nacheinander an, um ein Paar zu bilden – oder schiebe den Regler Richtung „mehr Vorschläge“ und tippe „Neu zuordnen“.</div>';
 
   $('#poolKopf').hidden = $('#pool').hidden = nurAuswahl;
   $('#pool').innerHTML = pool.map((f) => fotoHtml(f, '')).join('') || '<div class="leer">Alle Fotos sind einem Paar zugeordnet.</div>';
