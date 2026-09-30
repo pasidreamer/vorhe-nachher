@@ -3,7 +3,7 @@
 // nach 3 Sekunden ohne Antwort die gespeicherte Kopie nehmen.
 // Nach Änderungen an den Dateien: VERSION um eins erhöhen.
 
-const VERSION = 'vorher-nachher-v6';
+const VERSION = 'vorher-nachher-v7';
 const DATEIEN = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const DATEIEN = [
   './lib/pdf-lib.min.js',
   './lib/jszip.min.js',
   './lib/heic-to.js',
+  './lib/ki.js',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',

@@ -90,6 +90,12 @@ button { font: inherit; }
 .rolle.vorher { background: var(--vorher); }
 .rolle.nachher { background: var(--nachher); }
 .foto.gewaehlt { outline-color: var(--sel); }
+.klasse { position: absolute; top: 6px; right: 6px; z-index: 2; border: 0; border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 11px;
+  font-weight: 600; cursor: pointer; color: #fff; }
+.klasse.dreckig { background: rgba(120, 72, 28, .92); }
+.klasse.sauber { background: rgba(21, 128, 61, .92); }
+.klasse.hand { box-shadow: 0 0 0 2px #fff; }
+.klasse.widerspruch { background: var(--danger); }
 .foto.gewaehlt::after { content: ""; position: absolute; inset: 0; background: rgba(37,99,235,.18); }
 .waehlend .foto:not(.gewaehlt):hover { outline-color: #93b4f5; }
 
@@ -159,10 +165,11 @@ dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-hei
     </div>
   </div>
   <div class="erklaerung">
-    <p><b>So ordnet die App zu:</b> Sie vergleicht die Bilder optisch (Form, Kanten, Umgebung – nicht den Schmutz)
-      und nutzt die Aufnahmezeit aus dem Foto. Das frühere Bild wird „Vorher“, das spätere „Nachher“.
-      Fotos, die nur Sekunden auseinander liegen, gelten nicht als Paar (dazwischen kann nicht gereinigt worden sein).
-      Bei der Küche (erst alle Vorher-, Stunden später alle Nachher-Fotos) zählt vor allem der optische Vergleich und die Reihenfolge.</p>
+    <p><b>So ordnet die App zu:</b> Eine Bilderkennung stuft jedes Foto als <b>verschmutzt</b> oder <b>sauber</b> ein.
+      Ein Paar besteht immer aus einem verschmutzten (Vorher) und einem sauberen Foto (Nachher).
+      Dann vergleicht sie, welche Fotos dasselbe Bauteil zeigen, und nutzt die Aufnahmezeit: Nachher ist immer später als Vorher.
+      Ist ein Foto falsch eingestuft, tippe auf „verschmutzt“/„sauber“ oben rechts am Foto.
+      Passt ein Foto zu keinem anderen gut genug, bleibt es lieber „ohne Partner“ als falsch zugeordnet.</p>
     <p><b>Korrigieren:</b> Ein Foto antippen, dann ein zweites: Die beiden tauschen ihren Platz.
       Zwei Fotos „ohne Partner“ nacheinander antippen = neues Paar. Unsichere Paare sind orange markiert.</p>
     <p><b>Speichern:</b> als PDF-Bericht (Vorher neben Nachher), als umbenannte Kopien in einen Ordner oder als ZIP.</p>
@@ -223,6 +230,7 @@ dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-hei
 
 <script src="lib/pdf-lib.min.js"></script>
 <script src="lib/jszip.min.js"></script>
+<script src="lib/ki.js"></script>
 <script>
 'use strict';
 const $ = (s) => document.querySelector(s);
@@ -296,11 +304,13 @@ async function laden(dateien) {
   }
   await Promise.all([arbeiter(), arbeiter(), arbeiter(), arbeiter()]);
 
-  $('#fText').textContent = 'Fotos werden verglichen …';
-  await new Promise((r) => setTimeout(r, 30));
   fotos = neu;
   fotos.forEach((f) => fotoNachId.set(f.id, f));
+  await verschmutzungErkennen();
+  $('#fText').textContent = 'Fotos werden verglichen …';
+  await new Promise((r) => setTimeout(r, 30));
   zeitenFestlegen();
+  einteilen();
   zuordnen();
   zeige('inhalt');
   darstellen();
@@ -327,7 +337,7 @@ async function fotoLesen(datei) {
   return {
     id: naechsteId++, datei, anzeige, name: datei.name, ordner,
     exif, nameZeit: zeitAusName(datei.name), dateiZeit: datei.lastModified || null,
-    zeit: null, thumb: URL.createObjectURL(blob), breit: c.width, hoch: c.height, merk,
+    zeit: null, thumb: URL.createObjectURL(blob), thumbBlob: blob, breit: c.width, hoch: c.height, merk,
   };
 }
 
@@ -603,18 +613,69 @@ function vergleich(a, b) {
 }
 
 /* =====================================================================
+   Verschmutzt oder sauber? (Bilderkennung, lib/ki.js)
+   ===================================================================== */
+let kiFehler = '';
+async function verschmutzungErkennen() {
+  kiFehler = '';
+  $('#fText').textContent = 'Erkennung wird geladen … (nur beim ersten Mal ca. 45 MB)';
+  $('#fBalken').style.width = '0%';
+  try { await kiLaden(); }
+  catch (err) { kiFehler = 'Erkennung „verschmutzt / sauber“ nicht verfügbar (beim ersten Mal braucht es Internet). Zuordnung nur nach Aussehen und Zeit.'; return; }
+  for (let i = 0; i < fotos.length; i++) {
+    $('#fText').textContent = `Verschmutzung wird erkannt … ${i + 1} / ${fotos.length}`;
+    $('#fBalken').style.width = (100 * (i + 1) / fotos.length) + '%';
+    try {
+      const { schmutz, merkmal } = await kiAnalysieren(fotos[i].thumbBlob);
+      fotos[i].schmutz = schmutz; fotos[i].ki = merkmal;
+    } catch (err) { /* Foto bleibt ohne Einteilung */ }
+  }
+}
+
+// Pro Ordner die Schmutz-Werte in zwei Gruppen teilen: So zählt, was im Vergleich zu den
+// anderen Fotos desselben Einsatzes verschmutzt aussieht (dunkle Kanäle sind nicht automatisch schmutzig).
+function einteilen() {
+  const ordner = {};
+  fotos.forEach((f) => { if (f.schmutz != null) (ordner[f.ordner] = ordner[f.ordner] || []).push(f); });
+  for (const g of Object.values(ordner)) {
+    const werte = g.map((f) => f.schmutz);
+    let grenze = 0;
+    if (werte.length >= 2) {
+      let c1 = Math.min(...werte), c2 = Math.max(...werte);
+      for (let k = 0; k < 30; k++) {
+        const m = (c1 + c2) / 2, A = werte.filter((w) => w <= m), B = werte.filter((w) => w > m);
+        if (!A.length || !B.length) break;
+        c1 = A.reduce((s, w) => s + w, 0) / A.length; c2 = B.reduce((s, w) => s + w, 0) / B.length;
+      }
+      grenze = c2 - c1 >= 1.5 ? (c1 + c2) / 2 : 0;
+      grenze = Math.max(-1.5, Math.min(2.5, grenze));
+    }
+    g.forEach((f) => { f.klasseAuto = f.schmutz > grenze ? 'dreckig' : 'sauber'; f.klarheit = Math.abs(f.schmutz - grenze); });
+  }
+  fotos.forEach((f) => { f.klasse = f.klasseHand || f.klasseAuto || null; });
+}
+
+/* =====================================================================
    Zuordnung
    ===================================================================== */
 function zuordnen() {
   const schwelle = +$('#strenge').value;
   const mitZeit = !!zeitQuelle;
   const kand = [];
-  for (let i = 0; i < fotos.length; i++) for (let j = i + 1; j < fotos.length; j++) {
-    const a = fotos[i], b = fotos[j];
-    if (a.ordner !== b.ordner) continue;
-    kand.push({ a, b, ...vergleich(a.merk, b.merk) });
+  const mitKlasse = fotos.some((f) => f.klasse);
+  for (let i = 0; i < fotos.length; i++) for (let j = 0; j < fotos.length; j++) {
+    const a = fotos[i], b = fotos[j];   // a = Vorher, b = Nachher
+    if (i === j || a.ordner !== b.ordner) continue;
+    if (mitKlasse) {
+      // Ein Paar MUSS aus einem verschmutzten und einem sauberen Foto bestehen
+      if (a.klasse !== 'dreckig' || b.klasse !== 'sauber') continue;
+      if (a.zeit != null && b.zeit != null && b.zeit - a.zeit < 60000) continue; // Nachher kommt nach Vorher
+    } else if (j < i) continue;
+    const v = vergleich(a.merk, b.merk);
+    if (a.ki && b.ki) { let k = 0; for (let x = 0; x < a.ki.length; x++) k += a.ki[x] * b.ki[x]; v.ki = k; } else v.ki = 0;
+    kand.push({ a, b, ...v });
   }
-  if (!kand.length) { paare = []; return; }
+  if (!kand.length) { paare = []; geaendert = false; return; }
 
   // In Standardwerte umrechnen (wie stark hebt sich ein Paar vom Durchschnitt ab?)
   const std = (k) => {
@@ -622,12 +683,14 @@ function zuordnen() {
     const sd = Math.sqrt(kand.reduce((s, c) => s + (c[k] - m) ** 2, 0) / kand.length);
     return { m, sd: Math.max(sd, 0.03) };
   };
-  const sh = std('hog'), sk = std('korr'), sf = std('farbe');
+  const sh = std('hog'), sk = std('korr'), sf = std('farbe'), si = std('ki');
+  const mitKi = kand.every((c) => c.a.ki && c.b.ki);
 
   for (const c of kand) {
     const { a, b } = c;
-    let p = 0.45 * (c.hog - sh.m) / sh.sd + 0.35 * (c.korr - sk.m) / sk.sd + 0.20 * (c.farbe - sf.m) / sf.sd;
-    if (kand.length < 3) p = 2; // nur zwei Fotos
+    let p = mitKi
+      ? 0.6 * (c.ki - si.m) / si.sd + 0.25 * (c.hog - sh.m) / sh.sd + 0.15 * (c.korr - sk.m) / sk.sd
+      : 0.45 * (c.hog - sh.m) / sh.sd + 0.35 * (c.korr - sk.m) / sk.sd + 0.20 * (c.farbe - sf.m) / sf.sd;
     const direkt = b.pos === a.pos + 1;
     if (a.zeit != null && b.zeit != null) {
       const dt = (b.zeit - a.zeit) / 1000;
@@ -645,10 +708,18 @@ function zuordnen() {
   }
 
   kand.sort((x, y) => y.punkte - x.punkte);
+  // Rang: Wie gut passt b für a im Vergleich zu den anderen Möglichkeiten von a (und umgekehrt)?
+  const rangA = {}, rangB = {};
+  for (const c of kand) {
+    c.rA = rangA[c.a.id] = (rangA[c.a.id] ?? -1) + 1;
+    c.rB = rangB[c.b.id] = (rangB[c.b.id] ?? -1) + 1;
+  }
+  const wenige = kand.length < 4; // zu wenige Möglichkeiten für einen statistischen Vergleich
   const vergeben = new Set();
   paare = [];
   for (const c of kand) {
-    if (c.punkte < schwelle) break;
+    if (!wenige && c.punkte < schwelle) break;
+    if (c.rA > 1 || c.rB > 1) continue;  // völlig andere Bilder: nicht unter den besten zwei
     if (vergeben.has(c.a.id) || vergeben.has(c.b.id)) continue;
     vergeben.add(c.a.id); vergeben.add(c.b.id);
     paare.push({ id: naechsteId++, vorher: c.a.id, nachher: c.b.id, titel: '', punkte: c.punkte });
@@ -660,7 +731,9 @@ function zuordnen() {
       const ab = (c.a.id === p.vorher && c.b.id === p.nachher);
       if (!ab && (c.a.id === p.vorher || c.b.id === p.vorher || c.a.id === p.nachher || c.b.id === p.nachher)) { alt = c.punkte; break; }
     }
-    p.status = (p.punkte - alt >= 0.6 && p.punkte >= schwelle + 0.4) ? 'sicher' : 'pruefen';
+    const a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
+    const klar = !a.klasse || ((a.klarheit ?? 9) >= 1 && (b.klarheit ?? 9) >= 1) || (a.klasseHand && b.klasseHand);
+    p.status = (p.punkte - alt >= 0.6 && p.punkte >= schwelle + 0.4 && klar) ? 'sicher' : 'pruefen';
   }
   sortierePaare();
   geaendert = false;
@@ -702,6 +775,7 @@ function fotoHtml(f, rolle) {
   return `<figure class="foto${auswahl === f.id ? ' gewaehlt' : ''}" data-id="${f.id}">
     <img src="${f.thumb}" alt="" loading="lazy">
     ${rolle ? `<span class="rolle ${rolle}">${rolle.toUpperCase()}</span>` : ''}
+    ${f.klasse ? `<button class="klasse ${f.klasse}${f.klasseHand ? ' hand' : ''}${rolle && (rolle === 'vorher') !== (f.klasse === 'dreckig') ? ' widerspruch' : ''}" data-klasse="${f.id}" title="Antippen zum Ändern">${f.klasse === 'dreckig' ? 'verschmutzt' : 'sauber'}</button>` : ''}
     <figcaption>${esc(unter)}</figcaption></figure>`;
 }
 
@@ -711,8 +785,10 @@ function darstellen() {
   $('#zPaare').textContent = paare.length;
   $('#zPool').textContent = pool.length;
   const unsicher = paare.filter((p) => p.status === 'pruefen').length;
-  $('#info').textContent = `${fotos.length} Fotos · ${paare.length} Paare` + (unsicher ? ` (${unsicher} bitte prüfen)` : '') +
-    ` · ${pool.length} ohne Partner · Reihenfolge nach: ${zeitQuelle || 'Dateiname (keine Aufnahmezeit gefunden)'}`;
+  const nD = fotos.filter((f) => f.klasse === 'dreckig').length, nS = fotos.filter((f) => f.klasse === 'sauber').length;
+  $('#info').textContent = `${fotos.length} Fotos (${nD} verschmutzt, ${nS} sauber) · ${paare.length} Paare` + (unsicher ? ` (${unsicher} bitte prüfen)` : '') +
+    ` · ${pool.length} ohne Partner · Reihenfolge nach: ${zeitQuelle || 'Dateiname (keine Aufnahmezeit gefunden)'}` +
+    (kiFehler ? ' · ' + kiFehler : '') + (nD || nS ? ' · Tipp: „verschmutzt/sauber“ antippen, falls falsch erkannt.' : '');
 
   $('#paare').innerHTML = paare.map((p, i) => {
     const a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
@@ -745,6 +821,16 @@ $('#inhalt').addEventListener('click', (e) => {
     if (knopf.dataset.aktion === 'gross') grossOeffnen(paare.indexOf(p));
     return;
   }
+  const chip = e.target.closest('[data-klasse]');
+  if (chip) {
+    const f = fotoNachId.get(+chip.dataset.klasse);
+    f.klasseHand = f.klasse === 'dreckig' ? 'sauber' : 'dreckig';
+    einteilen();
+    if (!geaendert) zuordnen();   // noch nichts von Hand geändert: gleich neu zuordnen
+    auswahl = null;
+    darstellen();
+    return;
+  }
   const fig = e.target.closest('.foto');
   if (!fig) return;
   const id = +fig.dataset.id;
@@ -770,7 +856,8 @@ function platz(id) {
 function verbinden(x, y) {
   const px = platz(x), py = platz(y);
   if (!px && !py) {
-    const [a, b] = [fotoNachId.get(x), fotoNachId.get(y)].sort((m, n) => m.pos - n.pos);
+    const [a, b] = [fotoNachId.get(x), fotoNachId.get(y)].sort((m, n) =>
+      (m.klasse && n.klasse && m.klasse !== n.klasse) ? (m.klasse === 'dreckig' ? -1 : 1) : m.pos - n.pos);
     paare.push({ id: naechsteId++, vorher: a.id, nachher: b.id, titel: '', status: 'hand' });
   } else if (px && py && px.p === py.p) {
     [px.p.vorher, px.p.nachher] = [px.p.nachher, px.p.vorher];
