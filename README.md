@@ -27,6 +27,15 @@ Der Regler „mehr Paare ↔ nur sichere“ verschiebt die Schwelle.
 - Zwei Fotos „ohne Partner“ nacheinander = neues Paar.
 - Knöpfe am Paar: gross vergleichen, tauschen, auflösen. Bezeichnung eintippen (kommt in PDF und Dateinamen).
 
+## Für den Kunden auswählen
+
+- Am Paar „Auswählen“ tippen → kommt in den Kunden-Ordner. Bezeichnung eintippen oder aus der Liste
+  wählen (Küchenhaube, Abluftkanal, Zuluftkanal, Monoblock …; eigene Begriffe merkt sich die App).
+- Oben „Für Kunden ausgewählt“: nur die Auswahl, mit Pfeilen die Reihenfolge ändern (= Nummern).
+- Wird der Objektordner über „Ordner wählen“ geöffnet, speichert die App direkt in dessen Unterordner
+  „Vorher-Nachher“: `01 Küchenhaube vorher.jpg`, `01 Küchenhaube nachher.jpg` … iPhone-HEIC wird als JPG
+  gespeichert. Ein vorhandener Vorher-Nachher-Unterordner wird beim Einlesen übersprungen.
+
 ## Speichern
 
 - **PDF-Bericht**: zwei Paare pro A4-Seite, Vorher links, Nachher rechts, mit Überschrift, Objekt, Datum.

@@ -72,6 +72,19 @@ button { font: inherit; }
 #paare { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(520px, 100%), 1fr)); gap: 14px; }
 .paar { background: #fff; border-radius: 14px; border: 2px solid transparent; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 10px; }
 .paar.pruefen { border-color: #f3c47a; background: #fffcf6; }
+.paar.gewaehlt { border-color: var(--accent); background: #f2fbf9; }
+.stern { height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted);
+  font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.stern svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linejoin: round; }
+.stern.an { background: var(--accent); border-color: var(--accent); color: #fff; }
+.stern.an svg { fill: #fff; }
+.abschnitt[hidden], #pool[hidden] { display: none; }
+.ikon:disabled { opacity: .25; pointer-events: none; }
+.filter { display: inline-flex; margin-left: auto; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-weight: 400; }
+.filter button { border: 0; background: #fff; padding: 7px 12px; font: inherit; font-size: 13px; cursor: pointer; color: var(--muted); }
+.filter button.an { background: var(--accent); color: #fff; }
+dialog .wahl { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; font-size: 14px; }
+dialog .wahl label { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text); font-size: 14px; }
 .kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 8px; }
 .kopf .titel { min-width: 140px; }
 .nr { min-width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 14px;
@@ -191,9 +204,10 @@ dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-hei
 <div id="info"></div>
 
 <section id="inhalt">
-  <div class="abschnitt">Paare <span class="zahl" id="zPaare">0</span></div>
+  <div class="abschnitt">Paare <span class="zahl" id="zPaare">0</span>
+    <div class="filter"><button id="fAlle" class="an">Alle Paare</button><button id="fAuswahl">Für Kunden ausgewählt (<span id="zAuswahl">0</span>)</button></div></div>
   <div id="paare"></div>
-  <div class="abschnitt">Ohne Partner <span class="zahl" id="zPool">0</span></div>
+  <div class="abschnitt" id="poolKopf">Ohne Partner <span class="zahl" id="zPool">0</span></div>
   <div id="pool"></div>
   <div class="fehlerliste" id="fehler"></div>
 </section>
@@ -214,24 +228,35 @@ dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-hei
 
 <dialog id="dExport">
   <h3>Speichern</h3>
-  <label for="eTitel">Überschrift</label>
-  <input type="text" id="eTitel" value="Lüftungsreinigung – Vorher / Nachher">
-  <label for="eObjekt">Objekt / Kunde</label>
-  <input type="text" id="eObjekt" placeholder="z.B. Restaurant Sonne, Küche">
-  <label for="eDatum">Datum</label>
-  <input type="date" id="eDatum">
+  <div class="wahl">
+    <label><input type="radio" name="umfang" value="auswahl" id="uAuswahl"> Nur die für den Kunden ausgewählten Paare (<span id="dAuswahl">0</span>)</label>
+    <label><input type="radio" name="umfang" value="alle" id="uAlle"> Alle Paare (<span id="dAlle">0</span>)</label>
+  </div>
+  <label for="eUnter">Name des Unterordners</label>
+  <input type="text" id="eUnter" value="Vorher-Nachher">
   <div class="knoepfe">
-    <button class="btn primary" id="bPdf">PDF-Bericht</button>
-    <button class="btn" id="bKopie">In Ordner kopieren</button>
+    <button class="btn primary" id="bKopie">In Objektordner speichern</button>
+    <button class="btn" id="bPdf">PDF-Bericht</button>
     <button class="btn" id="bZip">Als ZIP</button>
     <div class="spacer"></div>
     <button class="btn" id="bSchliessen">Schliessen</button>
   </div>
   <div id="exportStatus"></div>
-  <div class="klein">PDF: zwei Paare pro Seite, mit Bezeichnung. Kopie/ZIP: Dateien werden umbenannt in
-    „01a_vorher_…“ und „01b_nachher_…“, Fotos ohne Partner kommen in den Unterordner „Ohne Partner“.</div>
+  <div class="klein" id="zielHinweis"></div>
+  <div class="klein">Dateinamen z.B. „01 Küchenhaube vorher.jpg“ und „01 Küchenhaube nachher.jpg“ (Nummer = Reihenfolge,
+    Text = Bezeichnung des Paars). iPhone-Fotos (HEIC) werden als JPG gespeichert, damit der Kunde sie öffnen kann.
+    Die Originale im Objektordner bleiben unverändert.</div>
+  <details class="klein"><summary>Angaben für den PDF-Bericht</summary>
+    <label for="eTitel">Überschrift</label>
+    <input type="text" id="eTitel" value="Lüftungsreinigung – Vorher / Nachher">
+    <label for="eObjekt">Objekt / Kunde</label>
+    <input type="text" id="eObjekt" placeholder="z.B. Primarschule Lengnau">
+    <label for="eDatum">Datum</label>
+    <input type="date" id="eDatum">
+  </details>
 </dialog>
 
+<datalist id="bezeichnungen"></datalist>
 <input type="file" id="iOrdner" webkitdirectory multiple hidden>
 <input type="file" id="iFotos" accept="image/*,.heic,.heif" multiple hidden>
 
@@ -255,10 +280,27 @@ const fotoNachId = new Map();
 /* =====================================================================
    Einlesen
    ===================================================================== */
-$('#bOrdner').onclick = $('#bOrdner2').onclick = () => $('#iOrdner').click();
+let quellOrdner = null;   // Ordner-Zugriff (Edge/Chrome), um später direkt dort hinein zu speichern
+$('#bOrdner').onclick = $('#bOrdner2').onclick = async () => {
+  if (!window.showDirectoryPicker) { $('#iOrdner').click(); return; }
+  let h;
+  try { h = await showDirectoryPicker({ id: 'objektordner', mode: 'read' }); } catch { return; }
+  const dateien = [];
+  await ordnerLesen(h, '', dateien);
+  quellOrdner = h;
+  if (!$('#eObjekt').value) $('#eObjekt').value = h.name;
+  laden(dateien);
+};
+const IST_VN_ORDNER = /^vorher.?nachher/i;  // eigenen Ergebnis-Ordner beim Einlesen überspringen
+async function ordnerLesen(h, pfad, liste) {
+  for await (const [name, e] of h.entries()) {
+    if (e.kind === 'file') { const f = await e.getFile(); f.pfad = pfad + name; liste.push(f); }
+    else if (!IST_VN_ORDNER.test(name)) await ordnerLesen(e, pfad + name + '/', liste);
+  }
+}
 $('#bFotos').onclick = $('#bFotos2').onclick = () => $('#iFotos').click();
-$('#iOrdner').onchange = (e) => { laden([...e.target.files]); e.target.value = ''; };
-$('#iFotos').onchange = (e) => { laden([...e.target.files]); e.target.value = ''; };
+$('#iOrdner').onchange = (e) => { quellOrdner = null; laden([...e.target.files].filter((f) => !f.webkitRelativePath.split('/').slice(1, -1).some((t) => IST_VN_ORDNER.test(t)))); e.target.value = ''; };
+$('#iFotos').onchange = (e) => { quellOrdner = null; laden([...e.target.files]); e.target.value = ''; };
 
 const drop = $('#drop');
 ['dragenter', 'dragover'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('drueber'); }));
@@ -270,6 +312,7 @@ document.addEventListener('drop', async (e) => {
   if (eintraege.length) {
     const dateien = [];
     for (const en of eintraege) await sammeln(en, '', dateien);
+    quellOrdner = null;
     laden(dateien);
   } else laden([...e.dataTransfer.files]);
 });
@@ -279,7 +322,7 @@ async function sammeln(eintrag, pfad, liste) {
     const f = await new Promise((ok, nein) => eintrag.file(ok, nein));
     f.pfad = pfad + f.name;
     liste.push(f);
-  } else if (eintrag.isDirectory) {
+  } else if (eintrag.isDirectory && !(pfad && IST_VN_ORDNER.test(eintrag.name))) {
     const leser = eintrag.createReader();
     let stueck;
     do {
@@ -799,6 +842,9 @@ function darstellen() {
   const imPaar = new Set(paare.flatMap((p) => [p.vorher, p.nachher]));
   const pool = fotos.filter((f) => !imPaar.has(f.id));
   $('#zPaare').textContent = paare.length;
+  $('#zAuswahl').textContent = paare.filter((p) => p.gewaehlt).length;
+  $('#fAlle').classList.toggle('an', !nurAuswahl);
+  $('#fAuswahl').classList.toggle('an', nurAuswahl);
   $('#zPool').textContent = pool.length;
   const unsicher = paare.filter((p) => p.status === 'pruefen').length;
   const nD = fotos.filter((f) => f.klasse === 'dreckig').length, nS = fotos.filter((f) => f.klasse === 'sauber').length;
@@ -806,13 +852,16 @@ function darstellen() {
     ` · ${pool.length} ohne Partner · Reihenfolge nach: ${zeitQuelle || 'Dateiname (keine Aufnahmezeit gefunden)'}` +
     (kiFehler ? ' · ' + kiFehler : '') + (nD || nS ? ' · Tipp: „verschmutzt/sauber“ antippen, falls falsch erkannt.' : '');
 
-  $('#paare').innerHTML = paare.map((p, i) => {
+  const liste = nurAuswahl ? ausgewaehlte() : paare;
+  $('#paare').innerHTML = liste.map((p, i) => {
     const a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
     const badge = { sicher: 'sicher', pruefen: 'bitte prüfen', hand: 'von Hand' }[p.status];
-    return `<div class="paar${p.status === 'pruefen' ? ' pruefen' : ''}" data-paar="${p.id}">
+    return `<div class="paar${p.gewaehlt ? ' gewaehlt' : p.status === 'pruefen' ? ' pruefen' : ''}" data-paar="${p.id}">
       <div class="kopf">
         <span class="nr">${i + 1}</span>
-        <input class="titel" value="${esc(p.titel)}" placeholder="Bezeichnung, z.B. Abluftkanal Küche" data-titel="${p.id}">
+        ${nurAuswahl ? `<button class="ikon" data-aktion="hoch" title="Nach vorne"${i ? '' : ' disabled'}><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button class="ikon" data-aktion="runter" title="Nach hinten"${i < liste.length - 1 ? '' : ' disabled'}><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>` : ''}
+        <button class="stern${p.gewaehlt ? ' an' : ''}" data-aktion="waehlen" title="Dieses Paar kommt in den Vorher-Nachher-Ordner für den Kunden"><svg viewBox="0 0 24 24"><path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4l-5.6 2.9 1.1-6.2L3 9.7l6.2-.9z"/></svg>${p.gewaehlt ? 'Für Kunden' : 'Auswählen'}</button>
+        <input class="titel" value="${esc(p.titel)}" placeholder="Bezeichnung, z.B. Abluftkanal" list="bezeichnungen" data-titel="${p.id}">
         <span class="badge ${p.status}">${badge}</span>
         <button class="ikon" data-aktion="gross" title="Gross vergleichen">${SVG.gross}</button>
         <button class="ikon" data-aktion="tauschen" title="Vorher/Nachher tauschen">${SVG.tauschen}</button>
@@ -820,8 +869,9 @@ function darstellen() {
       </div>
       <div class="bilder">${fotoHtml(a, 'vorher')}<div class="zwischen">${SVG.pfeil}${abstand(a, b)}</div>${fotoHtml(b, 'nachher')}</div>
     </div>`;
-  }).join('') || '<div class="leer">Noch keine Paare. Tippe zwei Fotos unten nacheinander an, um ein Paar zu bilden – oder schiebe den Regler Richtung „mehr Paare“ und tippe „Neu zuordnen“.</div>';
+  }).join('') || (nurAuswahl ? '<div class="leer">Noch nichts ausgewählt. Bei „Alle Paare“ auf „Auswählen“ tippen.</div>' : '') || '<div class="leer">Noch keine Paare. Tippe zwei Fotos unten nacheinander an, um ein Paar zu bilden – oder schiebe den Regler Richtung „mehr Paare“ und tippe „Neu zuordnen“.</div>';
 
+  $('#poolKopf').hidden = $('#pool').hidden = nurAuswahl;
   $('#pool').innerHTML = pool.map((f) => fotoHtml(f, '')).join('') || '<div class="leer">Alle Fotos sind einem Paar zugeordnet.</div>';
   $('#fehler').textContent = fehler.length ? `Nicht lesbar (${fehler.length}): ${fehler.join(', ')} – Datei beschädigt oder Format unbekannt.` : '';
   hinweisAktualisieren();
@@ -835,6 +885,17 @@ $('#inhalt').addEventListener('click', (e) => {
     if (knopf.dataset.aktion === 'tauschen') { [p.vorher, p.nachher] = [p.nachher, p.vorher]; p.status = 'hand'; geaendert = true; darstellen(); }
     if (knopf.dataset.aktion === 'trennen') { paare = paare.filter((x) => x !== p); geaendert = true; darstellen(); }
     if (knopf.dataset.aktion === 'gross') grossOeffnen(paare.indexOf(p));
+    if (knopf.dataset.aktion === 'hoch' || knopf.dataset.aktion === 'runter') {
+      const a = ausgewaehlte(), i = a.indexOf(p), j = i + (knopf.dataset.aktion === 'hoch' ? -1 : 1);
+      if (a[j]) [p.ordnung, a[j].ordnung] = [a[j].ordnung, p.ordnung];
+      geaendert = true; darstellen();
+    }
+    if (knopf.dataset.aktion === 'waehlen') {
+      p.gewaehlt = !p.gewaehlt;
+      if (p.gewaehlt) p.ordnung = Math.max(0, ...paare.filter((x) => x.gewaehlt && x !== p).map((x) => x.ordnung || 0)) + 1;
+      geaendert = true; darstellen();
+      if (p.gewaehlt && !p.titel) { const t = document.querySelector(`[data-titel="${p.id}"]`); if (t) t.focus(); }
+    }
     return;
   }
   const chip = e.target.closest('[data-klasse]');
@@ -901,6 +962,29 @@ function hinweisAktualisieren() {
     `<button class="vschlag" data-vorschlag="${v.f.id}"><img src="${v.f.thumb}" alt=""><span>${i + 1}. ${v.frei ? 'ohne Partner' : 'in Paar'}</span></button>`).join('');
 }
 $('#bAbbrechen').onclick = () => { auswahl = null; darstellen(); };
+
+let nurAuswahl = false;
+// Für den Kunden ausgewählte Paare in der gewünschten Reihenfolge (= Nummern im Ordner)
+function ausgewaehlte() { return paare.filter((p) => p.gewaehlt).sort((a, b) => (a.ordnung || 0) - (b.ordnung || 0)); }
+$('#fAlle').onclick = () => { nurAuswahl = false; darstellen(); };
+$('#fAuswahl').onclick = () => { nurAuswahl = true; darstellen(); };
+
+// Bezeichnungen: feste Vorschläge + selbst eingetippte (auf diesem Gerät gemerkt)
+const BEZEICHNUNGEN = ['Küchenhaube', 'Abluftkanal', 'Zuluftkanal', 'Aussenluftkanal', 'Fortluftkanal', 'Abluftsammelkanal',
+  'Abluftgitter', 'Zuluftgitter', 'Monoblock', 'Ventilator', 'Wärmetauscher', 'Filterkammer', 'Brandschutzklappe', 'Flexrohr',
+  'Wickelfalzrohr', 'Schalldämpfer', 'Tellerventil', 'Dachventilator', 'Fettfilter'];
+function eigeneBezeichnungen() { try { return JSON.parse(localStorage.getItem('vn-bezeichnungen') || '[]'); } catch { return []; } }
+function bezeichnungenFuellen() {
+  const alle = [...new Set([...BEZEICHNUNGEN, ...eigeneBezeichnungen()])];
+  $('#bezeichnungen').innerHTML = alle.map((b) => `<option value="${esc(b)}">`).join('');
+}
+$('#inhalt').addEventListener('change', (e) => {
+  const t = e.target.dataset && e.target.dataset.titel && e.target.value.trim();
+  if (!t || BEZEICHNUNGEN.includes(t)) return;
+  try { localStorage.setItem('vn-bezeichnungen', JSON.stringify([...new Set([t, ...eigeneBezeichnungen()])].slice(0, 40))); } catch {}
+  bezeichnungenFuellen();
+});
+bezeichnungenFuellen();
 
 // Die besten Partner-Vorschläge für ein Foto (verschmutzt -> saubere Fotos und umgekehrt)
 function vorschlaegeFuer(id) {
@@ -978,6 +1062,14 @@ $('#bExport').onclick = () => {
     const d = t ? new Date(t.zeit) : new Date();
     $('#eDatum').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
+  const nAus = paare.filter((p) => p.gewaehlt).length;
+  $('#dAuswahl').textContent = nAus; $('#dAlle').textContent = paare.length;
+  $('#uAuswahl').disabled = !nAus;
+  (nAus ? $('#uAuswahl') : $('#uAlle')).checked = true;
+  $('#bKopie').textContent = quellOrdner ? `In „${quellOrdner.name}“ speichern` : 'In Ordner speichern';
+  $('#zielHinweis').textContent = quellOrdner
+    ? `Ziel: Ordner „${quellOrdner.name}“ → Unterordner „${$('#eUnter').value}“. Edge fragt beim ersten Mal, ob die App dort speichern darf.`
+    : 'Du wählst gleich den Objektordner aus; darin wird der Unterordner angelegt.';
   $('#exportStatus').textContent = '';
   $('#dExport').showModal();
 };
@@ -988,19 +1080,31 @@ const datumCH = () => { const v = $('#eDatum').value; if (!v) return ''; const [
 const basisName = () => sauber(['Vorher-Nachher', $('#eObjekt').value, datumCH()].filter(Boolean).join(' '), 120);
 const status = (t) => ($('#exportStatus').textContent = t);
 
+function exportPaare() {
+  return $('#uAuswahl').checked ? ausgewaehlte() : paare;
+}
 function dateiListe() {
-  const liste = [];
-  const breite = String(paare.length).length < 2 ? 2 : String(paare.length).length;
-  paare.forEach((p, i) => {
+  const liste = [], ep = exportPaare();
+  const breite = Math.max(2, String(ep.length).length);
+  ep.forEach((p, i) => {
     const nr = String(i + 1).padStart(breite, '0');
-    const t = p.titel ? sauber(p.titel, 40) + '_' : '';
-    const a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
-    liste.push({ pfad: `${nr}a_vorher_${t}${a.name}`, datei: a.datei });
-    liste.push({ pfad: `${nr}b_nachher_${t}${b.name}`, datei: b.datei });
+    const t = p.titel ? ' ' + sauber(p.titel, 60) : '';
+    for (const [rolle, id] of [['vorher', p.vorher], ['nachher', p.nachher]]) {
+      const f = fotoNachId.get(id);
+      const heic = /\.(heic|heif)$/i.test(f.name) || !!f.anzeige;
+      const endung = heic ? '.jpg' : (f.name.match(/\.[^.]+$/) || ['.jpg'])[0].toLowerCase();
+      liste.push({ pfad: `${nr}${t} ${rolle}${endung}`, foto: f, heic });
+    }
   });
-  const imPaar = new Set(paare.flatMap((p) => [p.vorher, p.nachher]));
-  fotos.filter((f) => !imPaar.has(f.id)).forEach((f) => liste.push({ pfad: `Ohne Partner/${f.name}`, datei: f.datei }));
   return liste;
+}
+// iPhone-Fotos in volle Grösse als JPG umwandeln, alle anderen unverändert
+async function exportInhalt(x) {
+  if (!x.heic) return x.foto.datei;
+  try {
+    const HeicTo = await heicLaden();
+    return await HeicTo({ blob: x.foto.datei, type: 'image/jpeg', quality: 0.92 });
+  } catch { return x.foto.anzeige || x.foto.datei; }
 }
 
 async function blobSpeichern(blob, name, typ, endung) {
@@ -1018,32 +1122,42 @@ async function blobSpeichern(blob, name, typ, endung) {
 }
 
 $('#bKopie').onclick = async () => {
+  const liste = dateiListe();
+  if (!liste.length) { alert('Keine Paare zum Speichern.'); return; }
   if (!window.showDirectoryPicker) { alert('Dieser Browser kann nicht direkt in Ordner speichern. Bitte „Als ZIP“ verwenden (oder Edge/Chrome am PC).'); return; }
-  let ziel;
-  try { ziel = await showDirectoryPicker({ mode: 'readwrite' }); } catch { return; }
+  let ziel = quellOrdner;
   try {
-    const haupt = await ziel.getDirectoryHandle(basisName(), { create: true });
-    const liste = dateiListe();
+    if (ziel && (await ziel.requestPermission({ mode: 'readwrite' })) !== 'granted') ziel = null;
+    if (!ziel) ziel = await showDirectoryPicker({ id: 'objektordner', mode: 'readwrite' });
+  } catch { return; }
+  const unterName = sauber($('#eUnter').value || 'Vorher-Nachher', 80);
+  try {
+    const unter = await ziel.getDirectoryHandle(unterName, { create: true });
+    let vorhanden = 0;
+    for await (const _ of unter.keys()) vorhanden++;
+    if (vorhanden && !confirm(`Im Ordner „${unterName}“ liegen schon ${vorhanden} Dateien. Trotzdem speichern? (Gleichnamige werden ersetzt, andere bleiben.)`)) return;
     for (let i = 0; i < liste.length; i++) {
-      status(`Kopiere ${i + 1} / ${liste.length} …`);
-      const teile = liste[i].pfad.split('/');
-      let ordner = haupt;
-      for (const t of teile.slice(0, -1)) ordner = await ordner.getDirectoryHandle(t, { create: true });
-      const h = await ordner.getFileHandle(teile.at(-1), { create: true });
-      const w = await h.createWritable(); await w.write(liste[i].datei); await w.close();
+      status(`Speichere ${i + 1} / ${liste.length} …` + (liste[i].heic ? ' (iPhone-Foto wird in JPG umgewandelt)' : ''));
+      const h = await unter.getFileHandle(liste[i].pfad, { create: true });
+      const w = await h.createWritable(); await w.write(await exportInhalt(liste[i])); await w.close();
     }
-    status(`Fertig: ${liste.length} Fotos in „${basisName()}“ gespeichert.`);
+    status(`Fertig: ${liste.length} Fotos in „${ziel.name}\\${unterName}“ gespeichert.`);
   } catch (e) { status(''); alert('Speichern fehlgeschlagen: ' + e.message); }
 };
 
 $('#bZip').onclick = async () => {
   const zip = new JSZip();
   const liste = dateiListe();
-  liste.forEach((x) => zip.file(x.pfad, x.datei, { binary: true }));
+  if (!liste.length) { alert('Keine Paare zum Speichern.'); return; }
+  const unterName = sauber($('#eUnter').value || 'Vorher-Nachher', 80);
+  for (let i = 0; i < liste.length; i++) {
+    status(`Fotos werden vorbereitet … ${i + 1} / ${liste.length}`);
+    zip.file(`${unterName}/${liste[i].pfad}`, await exportInhalt(liste[i]), { binary: true });
+  }
   status('ZIP wird erstellt …');
   const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true },
     (m) => status(`ZIP wird erstellt … ${Math.round(m.percent)} %`));
-  if (await blobSpeichern(blob, basisName() + '.zip', 'ZIP-Datei', '.zip')) status('ZIP gespeichert.'); else status('');
+  if (await blobSpeichern(blob, sauber([$('#eObjekt').value, unterName].filter(Boolean).join(' - '), 120) + '.zip', 'ZIP-Datei', '.zip')) status('ZIP gespeichert.'); else status('');
 };
 
 // Helvetica im PDF kennt nur westliche Zeichen
@@ -1064,7 +1178,8 @@ async function jpegFuerPdf(f) {
 }
 
 $('#bPdf').onclick = async () => {
-  if (!paare.length) { alert('Es gibt noch keine Paare.'); return; }
+  const ep = exportPaare();
+  if (!ep.length) { alert('Es gibt keine Paare für den Bericht.'); return; }
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const doc = await PDFDocument.create();
   const schrift = await doc.embedFont(StandardFonts.Helvetica);
@@ -1074,7 +1189,7 @@ $('#bPdf').onclick = async () => {
   const farbeV = rgb(0.71, 0.33, 0.04), farbeN = rgb(0.08, 0.5, 0.24);
   const titel = pdfText($('#eTitel').value), unter = pdfText([$('#eObjekt').value, datumCH()].filter(Boolean).join('  ·  '));
   const oben = H - M - 46, unten = M + 20, zeileH = (oben - unten) / 2, spalteW = (W - 2 * M - LUECKE) / 2;
-  const seiten = Math.ceil(paare.length / 2);
+  const seiten = Math.ceil(ep.length / 2);
 
   for (let s = 0; s < seiten; s++) {
     const seite = doc.addPage([W, H]);
@@ -1086,9 +1201,9 @@ $('#bPdf').onclick = async () => {
 
     for (let r = 0; r < 2; r++) {
       const i = s * 2 + r;
-      if (i >= paare.length) break;
-      status(`PDF: Paar ${i + 1} / ${paare.length} …`);
-      const p = paare[i], fa = fotoNachId.get(p.vorher), fb = fotoNachId.get(p.nachher);
+      if (i >= ep.length) break;
+      status(`PDF: Paar ${i + 1} / ${ep.length} …`);
+      const p = ep[i], fa = fotoNachId.get(p.vorher), fb = fotoNachId.get(p.nachher);
       const y0 = oben - r * zeileH;
       seite.drawText(pdfText(`${i + 1}.  ${p.titel || ''}`).trim(), { x: M, y: y0 - 16, size: 11, font: fett, color: dunkel });
       const boxOben = y0 - 42, boxH = zeileH - 52;
