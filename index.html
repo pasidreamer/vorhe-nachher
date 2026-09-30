@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0f766e">
+<meta name="description" content="Vorher-/Nachher-Fotos der Lüftungsreinigung automatisch zuordnen, prüfen und als Bericht speichern.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Vorher-Nachher</title>
+<style>
+:root {
+  --bg: #eef1f4; --bar: #ffffff; --line: #d6dce3; --text: #1b2430; --muted: #687384;
+  --accent: #0f766e; --accent-soft: #dff3f0; --vorher: #b45309; --nachher: #15803d;
+  --warn: #d97706; --warn-soft: #fff4e0; --danger: #c62828; --sel: #2563eb;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; }
+body { min-height: 100vh; }
+button { font: inherit; }
+
+/* ---------- Leiste oben ---------- */
+#bar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 8px 12px; background: var(--bar); border-bottom: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+#bar h1 { font-size: 17px; margin: 0 8px 0 0; white-space: nowrap; }
+.spacer { flex: 1; }
+.btn { height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--text);
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; font-size: 14px; }
+.btn:hover { background: #f3f6f8; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: #0c625b; }
+.btn:disabled { opacity: .4; pointer-events: none; }
+.btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.strenge { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.strenge input { width: 110px; }
+
+#info { padding: 8px 14px; font-size: 13px; color: var(--muted); display: none; }
+#hinweis { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(720px, calc(100% - 24px)); z-index: 20; padding: 10px 14px; border-radius: 10px; background: var(--sel); color: #fff;
+  font-size: 14px; display: none; align-items: center; gap: 12px; box-shadow: 0 4px 14px rgba(37,99,235,.3); }
+#hinweis.an { display: flex; }
+#hinweis button { margin-left: auto; background: rgba(255,255,255,.2); color: #fff; border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+
+/* ---------- Startfläche ---------- */
+#start { max-width: 760px; margin: 40px auto; padding: 0 16px; }
+#drop { border: 3px dashed #b7c2cf; border-radius: 18px; background: #fff; padding: 40px 24px; text-align: center; transition: .15s; }
+#drop.drueber { border-color: var(--accent); background: var(--accent-soft); }
+#drop h2 { margin: 0 0 8px; font-size: 22px; }
+#drop p { color: var(--muted); margin: 6px 0; }
+#drop .knoepfe { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+.erklaerung { margin-top: 24px; font-size: 14px; color: var(--muted); line-height: 1.55; }
+.erklaerung b { color: var(--text); }
+
+/* ---------- Fortschritt ---------- */
+#fortschritt { display: none; max-width: 520px; margin: 60px auto; padding: 0 16px; text-align: center; }
+#fortschritt .balken { height: 10px; border-radius: 6px; background: #d9e0e7; overflow: hidden; margin-top: 12px; }
+#fortschritt .balken div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+
+/* ---------- Paare ---------- */
+#inhalt { display: none; padding: 4px 12px 80px; max-width: 1400px; margin: 0 auto; }
+.abschnitt { font-size: 15px; font-weight: 600; margin: 18px 4px 10px; display: flex; align-items: center; gap: 10px; }
+.abschnitt .zahl { background: #dfe5ec; border-radius: 20px; padding: 1px 10px; font-size: 13px; }
+#paare { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(520px, 100%), 1fr)); gap: 14px; }
+.paar { background: #fff; border-radius: 14px; border: 2px solid transparent; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 10px; }
+.paar.pruefen { border-color: #f3c47a; background: #fffcf6; }
+.kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 8px; }
+.kopf .titel { min-width: 140px; }
+.nr { min-width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 14px;
+  display: flex; align-items: center; justify-content: center; }
+.titel { flex: 1; min-width: 0; height: 34px; border: 1px solid transparent; border-radius: 8px; padding: 0 8px; font: inherit; font-size: 14px; background: #f4f6f8; }
+.titel:focus { outline: none; border-color: var(--accent); background: #fff; }
+.badge { font-size: 12px; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+.badge.sicher { background: #dcf3e3; color: var(--nachher); }
+.badge.pruefen { background: var(--warn-soft); color: var(--warn); }
+.badge.hand { background: #e3ebff; color: #1d4ed8; }
+.ikon { width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.ikon:hover { background: #eef1f4; color: var(--text); }
+.ikon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bilder { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: center; }
+.zwischen { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.3; }
+.zwischen svg { width: 22px; height: 22px; stroke: #9aa5b3; fill: none; stroke-width: 2; display: block; margin: 0 auto 2px; }
+
+.foto { position: relative; margin: 0; border-radius: 10px; overflow: hidden; background: #e7ebef; cursor: pointer; outline: 3px solid transparent; outline-offset: -3px; }
+.foto img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; pointer-events: none; }
+.foto figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 11px; color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.65)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.foto .rolle { position: absolute; top: 6px; left: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #fff; padding: 2px 8px; border-radius: 6px; }
+.rolle.vorher { background: var(--vorher); }
+.rolle.nachher { background: var(--nachher); }
+.foto.gewaehlt { outline-color: var(--sel); }
+.foto.gewaehlt::after { content: ""; position: absolute; inset: 0; background: rgba(37,99,235,.18); }
+.waehlend .foto:not(.gewaehlt):hover { outline-color: #93b4f5; }
+
+#pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(170px, 40%), 1fr)); gap: 10px; }
+#pool .foto img { aspect-ratio: 4 / 3; }
+.leer { color: var(--muted); font-size: 14px; padding: 6px 4px; }
+.fehlerliste { font-size: 13px; color: var(--danger); margin: 10px 4px; }
+
+/* ---------- Grosse Ansicht ---------- */
+#gross { position: fixed; inset: 0; z-index: 50; background: rgba(12,16,22,.94); display: none; flex-direction: column; }
+#gross.an { display: flex; }
+#gross .oben { display: flex; align-items: center; gap: 10px; padding: 10px 14px; color: #fff; }
+#gross .oben .t { flex: 1; font-size: 15px; }
+#gross .zwei { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 10px 10px; min-height: 0; }
+#gross .seite { position: relative; min-height: 0; display: flex; flex-direction: column; }
+#gross .seite img { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+#gross .seite .rolle { position: static; align-self: flex-start; margin-bottom: 6px; }
+#gross .seite .n { color: #cfd6df; font-size: 12px; margin-top: 4px; }
+#gross .ikon { color: #fff; }
+#gross .ikon:hover { background: rgba(255,255,255,.12); }
+
+/* ---------- Dialog ---------- */
+dialog { border: 0; border-radius: 16px; padding: 22px; width: min(520px, 94vw); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+dialog::backdrop { background: rgba(10,20,30,.45); }
+dialog h3 { margin: 0 0 14px; }
+dialog label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+dialog input[type=text], dialog input[type=date] { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font: inherit; }
+dialog .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+#exportStatus { font-size: 13px; color: var(--accent); margin-top: 10px; min-height: 18px; }
+
+@media (max-width: 640px) {
+  .zwischen { font-size: 10px; }
+  .kopf .titel { order: 5; flex-basis: 100%; }
+  .kopf .badge { margin-right: auto; }
+  #bar h1 { width: 100%; }
+  .btn .lang { display: none; }
+  #gross .zwei { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <h1>Vorher / Nachher</h1>
+  <button class="btn" id="bOrdner"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Ordner<span class="lang">&nbsp;wählen</span></button>
+  <button class="btn" id="bFotos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>Fotos<span class="lang">&nbsp;wählen</span></button>
+  <div class="spacer"></div>
+  <div class="strenge" id="strengeBox" hidden>
+    <span>mehr Paare</span><input type="range" id="strenge" min="0.4" max="2.6" step="0.1" value="1.2"><span>nur sichere</span>
+  </div>
+  <button class="btn" id="bNeu" disabled title="Automatische Zuordnung neu berechnen"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span class="lang">Neu&nbsp;</span>zuordnen</button>
+  <button class="btn primary" id="bExport" disabled><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Speichern</button>
+</div>
+
+<div id="hinweis"><span id="hinweisText"></span><button id="bAbbrechen">Abbrechen</button></div>
+
+<section id="start">
+  <div id="drop">
+    <h2>Fotos hier hineinziehen</h2>
+    <p>Einen ganzen Ordner oder einzelne Fotos (JPG, PNG, HEIC falls der Browser es kann).</p>
+    <p>Die Fotos bleiben auf diesem Gerät – es wird nichts hochgeladen.</p>
+    <div class="knoepfe">
+      <button class="btn primary" id="bOrdner2"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Ordner wählen</button>
+      <button class="btn" id="bFotos2"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>Fotos wählen</button>
+    </div>
+  </div>
+  <div class="erklaerung">
+    <p><b>So ordnet die App zu:</b> Sie vergleicht die Bilder optisch (Form, Kanten, Umgebung – nicht den Schmutz)
+      und nutzt die Aufnahmezeit aus dem Foto. Das frühere Bild wird „Vorher“, das spätere „Nachher“.
+      Fotos, die nur Sekunden auseinander liegen, gelten nicht als Paar (dazwischen kann nicht gereinigt worden sein).
+      Bei der Küche (erst alle Vorher-, Stunden später alle Nachher-Fotos) zählt vor allem der optische Vergleich und die Reihenfolge.</p>
+    <p><b>Korrigieren:</b> Ein Foto antippen, dann ein zweites: Die beiden tauschen ihren Platz.
+      Zwei Fotos „ohne Partner“ nacheinander antippen = neues Paar. Unsichere Paare sind orange markiert.</p>
+    <p><b>Speichern:</b> als PDF-Bericht (Vorher neben Nachher), als umbenannte Kopien in einen Ordner oder als ZIP.</p>
+  </div>
+</section>
+
+<section id="fortschritt">
+  <div id="fText">Fotos werden gelesen …</div>
+  <div class="balken"><div id="fBalken"></div></div>
+</section>
+
+<div id="info"></div>
+
+<section id="inhalt">
+  <div class="abschnitt">Paare <span class="zahl" id="zPaare">0</span></div>
+  <div id="paare"></div>
+  <div class="abschnitt">Ohne Partner <span class="zahl" id="zPool">0</span></div>
+  <div id="pool"></div>
+  <div class="fehlerliste" id="fehler"></div>
+</section>
+
+<div id="gross">
+  <div class="oben">
+    <button class="ikon" id="gZurueck" title="Vorheriges Paar"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="ikon" id="gWeiter" title="Nächstes Paar"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+    <div class="t" id="gTitel"></div>
+    <button class="ikon" id="gTauschen" title="Vorher/Nachher tauschen"><svg viewBox="0 0 24 24"><path d="M7 7h13l-4-4"/><path d="M17 17H4l4 4"/></svg></button>
+    <button class="ikon" id="gZu" title="Schliessen"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="zwei">
+    <div class="seite"><span class="rolle vorher">VORHER</span><img id="gA" alt=""><div class="n" id="gAn"></div></div>
+    <div class="seite"><span class="rolle nachher">NACHHER</span><img id="gB" alt=""><div class="n" id="gBn"></div></div>
+  </div>
+</div>
+
+<dialog id="dExport">
+  <h3>Speichern</h3>
+  <label for="eTitel">Überschrift</label>
+  <input type="text" id="eTitel" value="Lüftungsreinigung – Vorher / Nachher">
+  <label for="eObjekt">Objekt / Kunde</label>
+  <input type="text" id="eObjekt" placeholder="z.B. Restaurant Sonne, Küche">
+  <label for="eDatum">Datum</label>
+  <input type="date" id="eDatum">
+  <div class="knoepfe">
+    <button class="btn primary" id="bPdf">PDF-Bericht</button>
+    <button class="btn" id="bKopie">In Ordner kopieren</button>
+    <button class="btn" id="bZip">Als ZIP</button>
+    <div class="spacer"></div>
+    <button class="btn" id="bSchliessen">Schliessen</button>
+  </div>
+  <div id="exportStatus"></div>
+  <div class="klein">PDF: zwei Paare pro Seite, mit Bezeichnung. Kopie/ZIP: Dateien werden umbenannt in
+    „01a_vorher_…“ und „01b_nachher_…“, Fotos ohne Partner kommen in den Unterordner „Ohne Partner“.</div>
+</dialog>
+
+<input type="file" id="iOrdner" webkitdirectory multiple hidden>
+<input type="file" id="iFotos" accept="image/*,.heic,.heif" multiple hidden>
+
+<script src="lib/pdf-lib.min.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const BILD_ENDUNG = /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i;
+
+let fotos = [];      // in Aufnahme-Reihenfolge
+let paare = [];      // { id, vorher, nachher, titel, status: 'sicher'|'pruefen'|'hand' }
+let fehler = [];
+let auswahl = null;  // Foto-ID
+let zeitQuelle = '';
+let geaendert = false;
+let naechsteId = 1;
+const fotoNachId = new Map();
+
+/* =====================================================================
+   Einlesen
+   ===================================================================== */
+$('#bOrdner').onclick = $('#bOrdner2').onclick = () => $('#iOrdner').click();
+$('#bFotos').onclick = $('#bFotos2').onclick = () => $('#iFotos').click();
+$('#iOrdner').onchange = (e) => { laden([...e.target.files]); e.target.value = ''; };
+$('#iFotos').onchange = (e) => { laden([...e.target.files]); e.target.value = ''; };
+
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('drueber'); }));
+['dragleave', 'dragend'].forEach((t) => document.addEventListener(t, (e) => { if (!e.relatedTarget) drop.classList.remove('drueber'); }));
+document.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  drop.classList.remove('drueber');
+  const eintraege = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (eintraege.length) {
+    const dateien = [];
+    for (const en of eintraege) await sammeln(en, '', dateien);
+    laden(dateien);
+  } else laden([...e.dataTransfer.files]);
+});
+
+async function sammeln(eintrag, pfad, liste) {
+  if (eintrag.isFile) {
+    const f = await new Promise((ok, nein) => eintrag.file(ok, nein));
+    f.pfad = pfad + f.name;
+    liste.push(f);
+  } else if (eintrag.isDirectory) {
+    const leser = eintrag.createReader();
+    let stueck;
+    do {
+      stueck = await new Promise((ok, nein) => leser.readEntries(ok, nein));
+      for (const k of stueck) await sammeln(k, pfad + eintrag.name + '/', liste);
+    } while (stueck.length);
+  }
+}
+
+async function laden(dateien) {
+  dateien = dateien.filter((f) => BILD_ENDUNG.test(f.name) || (f.type || '').startsWith('image/'));
+  if (!dateien.length) { alert('Keine Fotos gefunden.'); return; }
+  if (fotos.length && !confirm('Die bisherigen Fotos und Korrekturen werden ersetzt. Weiter?')) return;
+  fotos.forEach((f) => URL.revokeObjectURL(f.thumb));
+  fotos = []; paare = []; fehler = []; auswahl = null; fotoNachId.clear(); geaendert = false;
+
+  zeige('fortschritt');
+  let fertig = 0;
+  const liste = dateien.slice();
+  const neu = [];
+  async function arbeiter() {
+    while (liste.length) {
+      const datei = liste.shift();
+      try { neu.push(await fotoLesen(datei)); } catch (err) { fehler.push(datei.name); }
+      fertig++;
+      $('#fText').textContent = `Fotos werden gelesen … ${fertig} / ${dateien.length}`;
+      $('#fBalken').style.width = (100 * fertig / dateien.length) + '%';
+    }
+  }
+  await Promise.all([arbeiter(), arbeiter(), arbeiter(), arbeiter()]);
+
+  $('#fText').textContent = 'Fotos werden verglichen …';
+  await new Promise((r) => setTimeout(r, 30));
+  fotos = neu;
+  fotos.forEach((f) => fotoNachId.set(f.id, f));
+  zeitenFestlegen();
+  zuordnen();
+  zeige('inhalt');
+  darstellen();
+}
+
+async function fotoLesen(datei) {
+  const pfad = datei.pfad || datei.webkitRelativePath || datei.name;
+  const ordner = pfad.includes('/') ? pfad.slice(0, pfad.lastIndexOf('/')) : '';
+  const [exif, bild] = await Promise.all([exifZeit(datei).catch(() => null), createImageBitmap(datei, { resizeWidth: 480, resizeQuality: 'medium' })]);
+  const c = document.createElement('canvas');
+  c.width = bild.width; c.height = bild.height;
+  c.getContext('2d').drawImage(bild, 0, 0);
+  const merk = merkmale(bild);
+  bild.close();
+  const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.82));
+  return {
+    id: naechsteId++, datei, name: datei.name, ordner,
+    exif, nameZeit: zeitAusName(datei.name), dateiZeit: datei.lastModified || null,
+    zeit: null, thumb: URL.createObjectURL(blob), breit: c.width, hoch: c.height, merk,
+  };
+}
+
+/* ---------- Aufnahmezeit aus EXIF (JPEG) ---------- */
+async function exifZeit(datei) {
+  const puffer = await datei.slice(0, 256 * 1024).arrayBuffer();
+  const v = new DataView(puffer);
+  if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return null;
+  let p = 2;
+  while (p + 10 < v.byteLength) {
+    const marker = v.getUint16(p);
+    if ((marker & 0xFF00) !== 0xFF00) return null;
+    const laenge = v.getUint16(p + 2);
+    if (marker === 0xFFE1 && v.getUint32(p + 4) === 0x45786966) return tiffZeit(v, p + 10);
+    if (marker === 0xFFDA) return null;
+    p += 2 + laenge;
+  }
+  return null;
+}
+function tiffZeit(v, t) {
+  const le = v.getUint16(t) === 0x4949;
+  const u16 = (o) => v.getUint16(t + o, le), u32 = (o) => v.getUint32(t + o, le);
+  const ifd = (off) => {
+    const e = {}, n = u16(off);
+    for (let i = 0; i < n; i++) { const b = off + 2 + i * 12; e[u16(b)] = { anz: u32(b + 4), feld: b + 8 }; }
+    return e;
+  };
+  const text = (e) => {
+    if (!e) return null;
+    const off = e.anz > 4 ? u32(e.feld) : e.feld;
+    let s = '';
+    for (let i = 0; i < e.anz - 1 && t + off + i < v.byteLength; i++) s += String.fromCharCode(v.getUint8(t + off + i));
+    return s;
+  };
+  try {
+    const ifd0 = ifd(u32(4));
+    let s = null;
+    if (ifd0[0x8769]) { const ex = ifd(u32(ifd0[0x8769].feld)); s = text(ex[0x9003]) || text(ex[0x9004]); }
+    return datumLesen(s || text(ifd0[0x0132]));
+  } catch { return null; }
+}
+function datumLesen(s) {
+  const m = s && s.match(/(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (!m || m[1] === '0000') return null;
+  return new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+}
+function zeitAusName(name) {
+  // z.B. 20260930_143012.jpg, IMG_20260930_143012.jpg, PXL_20260930_143012345.jpg
+  const m = name.match(/(20\d{2})[-_]?(\d{2})[-_]?(\d{2})[-_ T]?(\d{2})[-_.]?(\d{2})[-_.]?(\d{2})/);
+  if (!m || +m[2] > 12 || +m[3] > 31 || +m[4] > 23) return null;
+  return new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+}
+
+function zeitenFestlegen() {
+  const n = fotos.length;
+  const anteil = (k) => fotos.filter((f) => f[k] != null).length / n;
+  const dateiZeiten = new Set(fotos.map((f) => f.dateiZeit));
+  if (anteil('exif') >= 0.6) { zeitQuelle = 'Aufnahmezeit im Foto'; fotos.forEach((f) => (f.zeit = f.exif ?? f.nameZeit)); }
+  else if (anteil('nameZeit') >= 0.6) { zeitQuelle = 'Zeit im Dateinamen'; fotos.forEach((f) => (f.zeit = f.nameZeit ?? f.exif)); }
+  else if (dateiZeiten.size >= n * 0.9 && n > 1) { zeitQuelle = 'Datei-Änderungsdatum (unsicher)'; fotos.forEach((f) => (f.zeit = f.dateiZeit)); }
+  else { zeitQuelle = ''; fotos.forEach((f) => (f.zeit = null)); }
+
+  const namen = (a, b) => a.ordner.localeCompare(b.ordner) || a.name.localeCompare(b.name, 'de', { numeric: true });
+  fotos.sort((a, b) => {
+    if (a.ordner !== b.ordner) return namen(a, b);
+    if (a.zeit != null && b.zeit != null && a.zeit !== b.zeit) return a.zeit - b.zeit;
+    return namen(a, b);
+  });
+  fotos.forEach((f, i) => (f.pos = i));
+
+  // Phasen: Fotos, zwischen denen mehr als 20 Minuten liegen, gehören zu verschiedenen Arbeitsphasen
+  let phase = 0;
+  fotos.forEach((f, i) => {
+    const vor = fotos[i - 1];
+    if (i > 0 && (vor.ordner !== f.ordner || (f.zeit != null && vor.zeit != null && f.zeit - vor.zeit > 20 * 60000))) phase++;
+    f.phase = phase;
+  });
+  const gruppen = {};
+  fotos.forEach((f) => (gruppen[f.phase] = gruppen[f.phase] || []).push(f));
+  Object.values(gruppen).forEach((g) => g.forEach((f, i) => { f.phaseGroesse = g.length; f.phaseRel = g.length > 1 ? i / (g.length - 1) : 0.5; }));
+}
+
+/* =====================================================================
+   Bild-Merkmale: Kanten-Richtungen (Form), grobes Helligkeitsbild, Farben.
+   Helligkeit und Kontrast werden ausgeglichen, damit Schmutz vs. sauber
+   möglichst wenig zählt, die Form/Perspektive aber viel.
+   ===================================================================== */
+const N = 64;
+const mCanvas = document.createElement('canvas');
+mCanvas.width = mCanvas.height = N;
+const mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
+
+function merkmale(bild) {
+  mCtx.drawImage(bild, 0, 0, N, N);
+  const d = mCtx.getImageData(0, 0, N, N).data;
+  const grau = new Float32Array(N * N);
+  const farbe = new Float32Array(27);
+  for (let i = 0; i < N * N; i++) {
+    const r = d[i * 4] / 255, g = d[i * 4 + 1] / 255, b = d[i * 4 + 2] / 255;
+    grau[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), s = max ? (max - min) / max : 0;
+    if (s < 0.18 || max < 0.12) farbe[24 + Math.min(2, Math.floor(max * 3))]++;
+    else {
+      let h = max === r ? (g - b) / (max - min) : max === g ? 2 + (b - r) / (max - min) : 4 + (r - g) / (max - min);
+      h = ((h * 60) + 360) % 360;
+      farbe[Math.floor(h / 30) * 2 + (s < 0.5 ? 0 : 1)]++;
+    }
+  }
+  for (let i = 0; i < 27; i++) farbe[i] /= N * N;
+
+  let g = weichzeichnen(weichzeichnen(grau));
+  // Kontrast ausgleichen
+  let summe = 0, qsumme = 0;
+  for (const x of g) { summe += x; qsumme += x * x; }
+  const mittel = summe / g.length, sd = Math.sqrt(Math.max(1e-6, qsumme / g.length - mittel * mittel));
+  g = g.map((x) => (x - mittel) / sd);
+
+  // Kanten-Richtungs-Histogramm: 4x4 Zellen, 9 Richtungen
+  const Z = 4, B = 9, zelle = N / Z;
+  const hog = new Float32Array(Z * Z * B);
+  for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+    const gx = g[y * N + x + 1] - g[y * N + x - 1], gy = g[(y + 1) * N + x] - g[(y - 1) * N + x];
+    const mag = Math.sqrt(gx * gx + gy * gy);
+    let w = Math.atan2(gy, gx); if (w < 0) w += Math.PI;
+    const bin = Math.min(B - 1, Math.floor(w / Math.PI * B));
+    hog[(Math.floor(y / zelle) * Z + Math.floor(x / zelle)) * B + bin] += mag;
+  }
+  for (let c = 0; c < Z * Z; c++) {
+    let s = 1e-6; for (let k = 0; k < B; k++) s += hog[c * B + k] ** 2;
+    s = Math.sqrt(s); for (let k = 0; k < B; k++) hog[c * B + k] = Math.sqrt(hog[c * B + k] / s);
+  }
+  einheit(hog);
+
+  // Grobes Bild 20x20 (für Vergleich mit leichter Verschiebung)
+  const K = 20, klein = new Float32Array(K * K);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) klein[Math.floor(y * K / N) * K + Math.floor(x * K / N)] += g[y * N + x];
+
+  return { hog, klein, farbe, quer: bild.width >= bild.height };
+}
+function weichzeichnen(a) {
+  const o = new Float32Array(a.length);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let s = 0, n = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const yy = y + dy, xx = x + dx;
+      if (yy >= 0 && yy < N && xx >= 0 && xx < N) { s += a[yy * N + xx]; n++; }
+    }
+    o[y * N + x] = s / n;
+  }
+  return o;
+}
+function einheit(v) { let s = 1e-9; for (const x of v) s += x * x; s = Math.sqrt(s); for (let i = 0; i < v.length; i++) v[i] /= s; }
+
+function korrelation(a, b) {
+  // bestes Pearson-r über Verschiebungen von bis zu ±2 Feldern (Kamera nicht exakt gleich gehalten)
+  const K = 20, F = 16;
+  let best = -1;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    let sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+    for (let y = 0; y < F; y++) for (let x = 0; x < F; x++) {
+      const va = a[(y + 2) * K + x + 2], vb = b[(y + 2 + dy) * K + x + 2 + dx];
+      sa += va; sb += vb; saa += va * va; sbb += vb * vb; sab += va * vb;
+    }
+    const n = F * F, cov = sab - sa * sb / n, va = saa - sa * sa / n, vb = sbb - sb * sb / n;
+    const r = cov / Math.sqrt(Math.max(1e-9, va * vb));
+    if (r > best) best = r;
+  }
+  return best;
+}
+
+function vergleich(a, b) {
+  let hog = 0; for (let i = 0; i < a.hog.length; i++) hog += a.hog[i] * b.hog[i];
+  let farbe = 0; for (let i = 0; i < 27; i++) farbe += Math.min(a.farbe[i], b.farbe[i]);
+  return { hog, korr: korrelation(a.klein, b.klein), farbe };
+}
+
+/* =====================================================================
+   Zuordnung
+   ===================================================================== */
+function zuordnen() {
+  const schwelle = +$('#strenge').value;
+  const mitZeit = !!zeitQuelle;
+  const kand = [];
+  for (let i = 0; i < fotos.length; i++) for (let j = i + 1; j < fotos.length; j++) {
+    const a = fotos[i], b = fotos[j];
+    if (a.ordner !== b.ordner) continue;
+    kand.push({ a, b, ...vergleich(a.merk, b.merk) });
+  }
+  if (!kand.length) { paare = []; return; }
+
+  // In Standardwerte umrechnen (wie stark hebt sich ein Paar vom Durchschnitt ab?)
+  const std = (k) => {
+    const m = kand.reduce((s, c) => s + c[k], 0) / kand.length;
+    const sd = Math.sqrt(kand.reduce((s, c) => s + (c[k] - m) ** 2, 0) / kand.length);
+    return { m, sd: Math.max(sd, 0.03) };
+  };
+  const sh = std('hog'), sk = std('korr'), sf = std('farbe');
+
+  for (const c of kand) {
+    const { a, b } = c;
+    let p = 0.45 * (c.hog - sh.m) / sh.sd + 0.35 * (c.korr - sk.m) / sk.sd + 0.20 * (c.farbe - sf.m) / sf.sd;
+    if (kand.length < 3) p = 2; // nur zwei Fotos
+    const direkt = b.pos === a.pos + 1;
+    if (a.zeit != null && b.zeit != null) {
+      const dt = (b.zeit - a.zeit) / 1000;
+      if (dt < 45) p -= 2.0;              // gleicher Moment: zwei Ansichten, kein Vorher/Nachher
+      else if (dt < 150) p -= 0.7;        // sehr kurz für eine Reinigung
+      else if (direkt) p += 0.8;          // Kanal: direkt nach dem Reinigen fotografiert
+      if (dt > 16 * 3600) p -= 0.5;
+      if (a.phase !== b.phase && a.phaseGroesse >= 3 && b.phaseGroesse >= 3) {
+        // Küche: Nachher-Runde meist in ähnlicher Reihenfolge wie Vorher-Runde
+        p += Math.max(-0.4, 0.4 - 1.2 * Math.abs(a.phaseRel - b.phaseRel));
+      }
+    } else if (!mitZeit && direkt) p += 0.5;
+    if (a.merk.quer !== b.merk.quer) p -= 1.0;
+    c.punkte = p;
+  }
+
+  kand.sort((x, y) => y.punkte - x.punkte);
+  const vergeben = new Set();
+  paare = [];
+  for (const c of kand) {
+    if (c.punkte < schwelle) break;
+    if (vergeben.has(c.a.id) || vergeben.has(c.b.id)) continue;
+    vergeben.add(c.a.id); vergeben.add(c.b.id);
+    paare.push({ id: naechsteId++, vorher: c.a.id, nachher: c.b.id, titel: '', punkte: c.punkte });
+  }
+  // Sicherheit: Abstand zur besten Alternative der beiden Fotos
+  for (const p of paare) {
+    let alt = -Infinity;
+    for (const c of kand) {
+      const ab = (c.a.id === p.vorher && c.b.id === p.nachher);
+      if (!ab && (c.a.id === p.vorher || c.b.id === p.vorher || c.a.id === p.nachher || c.b.id === p.nachher)) { alt = c.punkte; break; }
+    }
+    p.status = (p.punkte - alt >= 0.6 && p.punkte >= schwelle + 0.4) ? 'sicher' : 'pruefen';
+  }
+  sortierePaare();
+  geaendert = false;
+}
+function sortierePaare() { paare.sort((x, y) => fotoNachId.get(x.vorher).pos - fotoNachId.get(y.vorher).pos); }
+
+/* =====================================================================
+   Darstellung
+   ===================================================================== */
+function zeige(was) {
+  $('#start').style.display = was === 'start' ? 'block' : 'none';
+  $('#fortschritt').style.display = was === 'fortschritt' ? 'block' : 'none';
+  $('#inhalt').style.display = was === 'inhalt' ? 'block' : 'none';
+  $('#info').style.display = was === 'inhalt' ? 'block' : 'none';
+  $('#strengeBox').hidden = was !== 'inhalt';
+  $('#bNeu').disabled = $('#bExport').disabled = was !== 'inhalt';
+}
+
+const uhr = (t) => t == null ? '' : new Date(t).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+function abstand(a, b) {
+  if (a.zeit == null || b.zeit == null) return '';
+  const min = Math.round(Math.abs(b.zeit - a.zeit) / 60000);
+  if (min < 1) return '< 1 Min.';
+  if (min < 60) return min + ' Min.';
+  const h = Math.floor(min / 60), m = min % 60;
+  return h + ' Std.' + (m ? ' ' + m + ' Min.' : '');
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const SVG = {
+  tauschen: '<svg viewBox="0 0 24 24"><path d="M7 7h13l-4-4"/><path d="M17 17H4l4 4"/></svg>',
+  gross: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  trennen: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  pfeil: '<svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg>',
+};
+
+function fotoHtml(f, rolle) {
+  const mehrereOrdner = new Set(fotos.map((x) => x.ordner)).size > 1;
+  const unter = [f.name, uhr(f.zeit), mehrereOrdner ? f.ordner.split('/').pop() : ''].filter(Boolean).join(' · ');
+  return `<figure class="foto${auswahl === f.id ? ' gewaehlt' : ''}" data-id="${f.id}">
+    <img src="${f.thumb}" alt="" loading="lazy">
+    ${rolle ? `<span class="rolle ${rolle}">${rolle.toUpperCase()}</span>` : ''}
+    <figcaption>${esc(unter)}</figcaption></figure>`;
+}
+
+function darstellen() {
+  const imPaar = new Set(paare.flatMap((p) => [p.vorher, p.nachher]));
+  const pool = fotos.filter((f) => !imPaar.has(f.id));
+  $('#zPaare').textContent = paare.length;
+  $('#zPool').textContent = pool.length;
+  const unsicher = paare.filter((p) => p.status === 'pruefen').length;
+  $('#info').textContent = `${fotos.length} Fotos · ${paare.length} Paare` + (unsicher ? ` (${unsicher} bitte prüfen)` : '') +
+    ` · ${pool.length} ohne Partner · Reihenfolge nach: ${zeitQuelle || 'Dateiname (keine Aufnahmezeit gefunden)'}`;
+
+  $('#paare').innerHTML = paare.map((p, i) => {
+    const a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
+    const badge = { sicher: 'sicher', pruefen: 'bitte prüfen', hand: 'von Hand' }[p.status];
+    return `<div class="paar${p.status === 'pruefen' ? ' pruefen' : ''}" data-paar="${p.id}">
+      <div class="kopf">
+        <span class="nr">${i + 1}</span>
+        <input class="titel" value="${esc(p.titel)}" placeholder="Bezeichnung, z.B. Abluftkanal Küche" data-titel="${p.id}">
+        <span class="badge ${p.status}">${badge}</span>
+        <button class="ikon" data-aktion="gross" title="Gross vergleichen">${SVG.gross}</button>
+        <button class="ikon" data-aktion="tauschen" title="Vorher/Nachher tauschen">${SVG.tauschen}</button>
+        <button class="ikon" data-aktion="trennen" title="Paar auflösen">${SVG.trennen}</button>
+      </div>
+      <div class="bilder">${fotoHtml(a, 'vorher')}<div class="zwischen">${SVG.pfeil}${abstand(a, b)}</div>${fotoHtml(b, 'nachher')}</div>
+    </div>`;
+  }).join('') || '<div class="leer">Noch keine Paare. Tippe zwei Fotos unten nacheinander an, um ein Paar zu bilden – oder schiebe den Regler Richtung „mehr Paare“ und tippe „Neu zuordnen“.</div>';
+
+  $('#pool').innerHTML = pool.map((f) => fotoHtml(f, '')).join('') || '<div class="leer">Alle Fotos sind einem Paar zugeordnet.</div>';
+  $('#fehler').textContent = fehler.length ? `Nicht lesbar (${fehler.length}): ${fehler.join(', ')} – z.B. HEIC-Fotos: am Handy unter Kamera-Formate „Maximale Kompatibilität“ (JPG) wählen.` : '';
+  hinweisAktualisieren();
+}
+
+/* ---------- Antippen: auswählen, tauschen, Paar bilden ---------- */
+$('#inhalt').addEventListener('click', (e) => {
+  const knopf = e.target.closest('[data-aktion]');
+  if (knopf) {
+    const p = paare.find((x) => x.id === +knopf.closest('[data-paar]').dataset.paar);
+    if (knopf.dataset.aktion === 'tauschen') { [p.vorher, p.nachher] = [p.nachher, p.vorher]; p.status = 'hand'; geaendert = true; darstellen(); }
+    if (knopf.dataset.aktion === 'trennen') { paare = paare.filter((x) => x !== p); geaendert = true; darstellen(); }
+    if (knopf.dataset.aktion === 'gross') grossOeffnen(paare.indexOf(p));
+    return;
+  }
+  const fig = e.target.closest('.foto');
+  if (!fig) return;
+  const id = +fig.dataset.id;
+  if (auswahl === null) { auswahl = id; darstellen(); return; }
+  if (auswahl === id) { auswahl = null; darstellen(); return; }
+  verbinden(auswahl, id);
+  auswahl = null;
+  geaendert = true;
+  darstellen();
+});
+$('#inhalt').addEventListener('input', (e) => {
+  const id = e.target.dataset && e.target.dataset.titel;
+  if (id) { paare.find((p) => p.id === +id).titel = e.target.value; geaendert = true; }
+});
+
+function platz(id) {
+  for (const p of paare) {
+    if (p.vorher === id) return { p, rolle: 'vorher' };
+    if (p.nachher === id) return { p, rolle: 'nachher' };
+  }
+  return null;
+}
+function verbinden(x, y) {
+  const px = platz(x), py = platz(y);
+  if (!px && !py) {
+    const [a, b] = [fotoNachId.get(x), fotoNachId.get(y)].sort((m, n) => m.pos - n.pos);
+    paare.push({ id: naechsteId++, vorher: a.id, nachher: b.id, titel: '', status: 'hand' });
+  } else if (px && py && px.p === py.p) {
+    [px.p.vorher, px.p.nachher] = [px.p.nachher, px.p.vorher];
+    px.p.status = 'hand';
+  } else {
+    // Plätze tauschen (ein Foto ohne Partner nimmt den Platz ein, das verdrängte geht nach unten)
+    if (px) px.p[px.rolle] = y;
+    if (py) py.p[py.rolle] = x;
+    if (px) px.p.status = 'hand';
+    if (py) py.p.status = 'hand';
+  }
+  sortierePaare();
+}
+
+function hinweisAktualisieren() {
+  const an = auswahl !== null;
+  $('#hinweis').classList.toggle('an', an);
+  $('#inhalt').classList.toggle('waehlend', an);
+  if (!an) return;
+  $('#hinweisText').textContent = platz(auswahl)
+    ? 'Foto gewählt. Jetzt das Foto antippen, mit dem es den Platz tauschen soll (im selben Paar: Vorher/Nachher tauschen).'
+    : 'Foto gewählt. Jetzt ein zweites Foto ohne Partner antippen = neues Paar, oder ein Foto in einem Paar = ersetzen.';
+}
+$('#bAbbrechen').onclick = () => { auswahl = null; darstellen(); };
+
+$('#bNeu').onclick = () => {
+  if (geaendert && !confirm('Deine Korrekturen und Bezeichnungen gehen verloren. Neu zuordnen?')) return;
+  auswahl = null; zuordnen(); darstellen();
+};
+$('#strenge').onchange = () => { if (!geaendert) { zuordnen(); darstellen(); } };
+
+/* ---------- Grosse Ansicht ---------- */
+let grossIndex = -1;
+const grossUrls = [];
+function grossOeffnen(i) {
+  if (i < 0 || i >= paare.length) return;
+  grossIndex = i;
+  grossUrls.splice(0).forEach((u) => URL.revokeObjectURL(u));
+  const p = paare[i], a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
+  const ua = URL.createObjectURL(a.datei), ub = URL.createObjectURL(b.datei);
+  grossUrls.push(ua, ub);
+  $('#gA').src = ua; $('#gB').src = ub;
+  $('#gA').onerror = () => ($('#gA').src = a.thumb);
+  $('#gB').onerror = () => ($('#gB').src = b.thumb);
+  $('#gAn').textContent = [a.name, uhr(a.zeit)].filter(Boolean).join(' · ');
+  $('#gBn').textContent = [b.name, uhr(b.zeit)].filter(Boolean).join(' · ') + (abstand(a, b) ? '  (' + abstand(a, b) + ' später)' : '');
+  $('#gTitel').textContent = `Paar ${i + 1} von ${paare.length}` + (p.titel ? ' – ' + p.titel : '');
+  $('#gross').classList.add('an');
+}
+function grossZu() { $('#gross').classList.remove('an'); grossUrls.splice(0).forEach((u) => URL.revokeObjectURL(u)); darstellen(); }
+$('#gZu').onclick = grossZu;
+$('#gZurueck').onclick = () => grossOeffnen(grossIndex - 1);
+$('#gWeiter').onclick = () => grossOeffnen(grossIndex + 1);
+$('#gTauschen').onclick = () => { const p = paare[grossIndex]; [p.vorher, p.nachher] = [p.nachher, p.vorher]; p.status = 'hand'; geaendert = true; grossOeffnen(grossIndex); };
+document.addEventListener('keydown', (e) => {
+  if ($('#gross').classList.contains('an')) {
+    if (e.key === 'Escape') grossZu();
+    if (e.key === 'ArrowLeft') grossOeffnen(grossIndex - 1);
+    if (e.key === 'ArrowRight') grossOeffnen(grossIndex + 1);
+  } else if (e.key === 'Escape' && auswahl !== null) { auswahl = null; darstellen(); }
+});
+
+/* =====================================================================
+   Speichern
+   ===================================================================== */
+$('#bExport').onclick = () => {
+  if (!$('#eDatum').value) {
+    const t = fotos.find((f) => f.zeit != null);
+    const d = t ? new Date(t.zeit) : new Date();
+    $('#eDatum').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  $('#exportStatus').textContent = '';
+  $('#dExport').showModal();
+};
+$('#bSchliessen').onclick = () => $('#dExport').close();
+
+const sauber = (s, max = 60) => String(s).replace(/[\\/:*?"<>|\x00-\x1f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, max);
+const datumCH = () => { const v = $('#eDatum').value; if (!v) return ''; const [y, m, d] = v.split('-'); return `${d}.${m}.${y}`; };
+const basisName = () => sauber(['Vorher-Nachher', $('#eObjekt').value, datumCH()].filter(Boolean).join(' '), 120);
+const status = (t) => ($('#exportStatus').textContent = t);
+
+function dateiListe() {
+  const liste = [];
+  const breite = String(paare.length).length < 2 ? 2 : String(paare.length).length;
+  paare.forEach((p, i) => {
+    const nr = String(i + 1).padStart(breite, '0');
+    const t = p.titel ? sauber(p.titel, 40) + '_' : '';
+    const a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
+    liste.push({ pfad: `${nr}a_vorher_${t}${a.name}`, datei: a.datei });
+    liste.push({ pfad: `${nr}b_nachher_${t}${b.name}`, datei: b.datei });
+  });
+  const imPaar = new Set(paare.flatMap((p) => [p.vorher, p.nachher]));
+  fotos.filter((f) => !imPaar.has(f.id)).forEach((f) => liste.push({ pfad: `Ohne Partner/${f.name}`, datei: f.datei }));
+  return liste;
+}
+
+async function blobSpeichern(blob, name, typ, endung) {
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await showSaveFilePicker({ suggestedName: name, types: [{ description: typ, accept: { [blob.type]: [endung] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+      return true;
+    } catch (e) { if (e.name === 'AbortError') return false; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  return true;
+}
+
+$('#bKopie').onclick = async () => {
+  if (!window.showDirectoryPicker) { alert('Dieser Browser kann nicht direkt in Ordner speichern. Bitte „Als ZIP“ verwenden (oder Edge/Chrome am PC).'); return; }
+  let ziel;
+  try { ziel = await showDirectoryPicker({ mode: 'readwrite' }); } catch { return; }
+  try {
+    const haupt = await ziel.getDirectoryHandle(basisName(), { create: true });
+    const liste = dateiListe();
+    for (let i = 0; i < liste.length; i++) {
+      status(`Kopiere ${i + 1} / ${liste.length} …`);
+      const teile = liste[i].pfad.split('/');
+      let ordner = haupt;
+      for (const t of teile.slice(0, -1)) ordner = await ordner.getDirectoryHandle(t, { create: true });
+      const h = await ordner.getFileHandle(teile.at(-1), { create: true });
+      const w = await h.createWritable(); await w.write(liste[i].datei); await w.close();
+    }
+    status(`Fertig: ${liste.length} Fotos in „${basisName()}“ gespeichert.`);
+  } catch (e) { status(''); alert('Speichern fehlgeschlagen: ' + e.message); }
+};
+
+$('#bZip').onclick = async () => {
+  const zip = new JSZip();
+  const liste = dateiListe();
+  liste.forEach((x) => zip.file(x.pfad, x.datei, { binary: true }));
+  status('ZIP wird erstellt …');
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true },
+    (m) => status(`ZIP wird erstellt … ${Math.round(m.percent)} %`));
+  if (await blobSpeichern(blob, basisName() + '.zip', 'ZIP-Datei', '.zip')) status('ZIP gespeichert.'); else status('');
+};
+
+// Helvetica im PDF kennt nur westliche Zeichen
+const pdfText = (s) => String(s).replace(/[^\x20-\x7e\xa0-\xff€–—„“”‘’•…]/g, '');
+
+async function jpegFuerPdf(f) {
+  const lang = 1500;
+  const opt = f.merk.quer ? { resizeWidth: lang } : { resizeHeight: lang };
+  let bild;
+  try { bild = await createImageBitmap(f.datei, { ...opt, resizeQuality: 'high' }); }
+  catch { bild = await createImageBitmap(await (await fetch(f.thumb)).blob()); }
+  const c = document.createElement('canvas');
+  c.width = bild.width; c.height = bild.height;
+  c.getContext('2d').drawImage(bild, 0, 0);
+  bild.close();
+  const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.82));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+$('#bPdf').onclick = async () => {
+  if (!paare.length) { alert('Es gibt noch keine Paare.'); return; }
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
+  const doc = await PDFDocument.create();
+  const schrift = await doc.embedFont(StandardFonts.Helvetica);
+  const fett = await doc.embedFont(StandardFonts.HelveticaBold);
+  const W = 595.28, H = 841.89, M = 36, LUECKE = 14;
+  const grau = rgb(0.42, 0.45, 0.5), dunkel = rgb(0.1, 0.14, 0.19);
+  const farbeV = rgb(0.71, 0.33, 0.04), farbeN = rgb(0.08, 0.5, 0.24);
+  const titel = pdfText($('#eTitel').value), unter = pdfText([$('#eObjekt').value, datumCH()].filter(Boolean).join('  ·  '));
+  const oben = H - M - 46, unten = M + 20, zeileH = (oben - unten) / 2, spalteW = (W - 2 * M - LUECKE) / 2;
+  const seiten = Math.ceil(paare.length / 2);
+
+  for (let s = 0; s < seiten; s++) {
+    const seite = doc.addPage([W, H]);
+    seite.drawText(titel, { x: M, y: H - M - 16, size: 16, font: fett, color: dunkel });
+    if (unter) seite.drawText(unter, { x: M, y: H - M - 32, size: 10, font: schrift, color: grau });
+    seite.drawLine({ start: { x: M, y: H - M - 40 }, end: { x: W - M, y: H - M - 40 }, thickness: 0.7, color: rgb(0.8, 0.83, 0.87) });
+    const fuss = `Seite ${s + 1} / ${seiten}`;
+    seite.drawText(fuss, { x: W - M - schrift.widthOfTextAtSize(fuss, 8), y: M, size: 8, font: schrift, color: grau });
+
+    for (let r = 0; r < 2; r++) {
+      const i = s * 2 + r;
+      if (i >= paare.length) break;
+      status(`PDF: Paar ${i + 1} / ${paare.length} …`);
+      const p = paare[i], fa = fotoNachId.get(p.vorher), fb = fotoNachId.get(p.nachher);
+      const y0 = oben - r * zeileH;
+      seite.drawText(pdfText(`${i + 1}.  ${p.titel || ''}`).trim(), { x: M, y: y0 - 16, size: 11, font: fett, color: dunkel });
+      const boxOben = y0 - 42, boxH = zeileH - 52;
+      for (const [k, f, wort, farbe] of [[0, fa, 'VORHER', farbeV], [1, fb, 'NACHHER', farbeN]]) {
+        const x = M + k * (spalteW + LUECKE);
+        const zeit = f.zeit != null ? '  ' + uhr(f.zeit) : '';
+        seite.drawText(wort, { x, y: y0 - 32, size: 9, font: fett, color: farbe });
+        seite.drawText(pdfText(zeit), { x: x + fett.widthOfTextAtSize(wort, 9), y: y0 - 32, size: 9, font: schrift, color: grau });
+        const bild = await doc.embedJpg(await jpegFuerPdf(f));
+        const mass = Math.min(spalteW / bild.width, boxH / bild.height);
+        const bw = bild.width * mass, bh = bild.height * mass;
+        seite.drawImage(bild, { x: x + (spalteW - bw) / 2, y: boxOben - bh, width: bw, height: bh });
+      }
+    }
+  }
+  status('PDF wird gespeichert …');
+  const blob = new Blob([await doc.save()], { type: 'application/pdf' });
+  if (await blobSpeichern(blob, basisName() + '.pdf', 'PDF-Dokument', '.pdf')) status('PDF-Bericht gespeichert.'); else status('');
+};
+
+window.addEventListener('beforeunload', (e) => { if (fotos.length) { e.preventDefault(); e.returnValue = ''; } });
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+zeige('start');
+</script>
+</body>
+</html>

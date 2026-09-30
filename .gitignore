@@ -1,0 +1,9 @@
+# Kundenfotos und Berichte niemals hochladen
+*.jpg
+*.jpeg
+*.png
+!icons/*.png
+*.heic
+*.pdf
+*.zip
+test/
