@@ -38,10 +38,17 @@ button { font: inherit; }
 .strenge[hidden], .btn[hidden] { display: none; }
 
 #info { padding: 8px 14px; font-size: 13px; color: var(--muted); display: none; }
-#hinweis { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(720px, calc(100% - 24px)); z-index: 20; padding: 10px 14px; border-radius: 10px; background: var(--sel); color: #fff;
-  font-size: 14px; display: none; align-items: center; gap: 12px; box-shadow: 0 4px 14px rgba(37,99,235,.3); }
+#hinweis { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(900px, calc(100% - 24px)); z-index: 20; padding: 10px 14px; border-radius: 12px; background: var(--sel); color: #fff;
+  font-size: 14px; display: none; flex-direction: column; gap: 8px; box-shadow: 0 4px 14px rgba(37,99,235,.3); }
 #hinweis.an { display: flex; }
-#hinweis button { margin-left: auto; background: rgba(255,255,255,.2); color: #fff; border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+#hinweis .hzeile { display: flex; align-items: center; gap: 12px; }
+#hinweis .hzeile button { margin-left: auto; background: rgba(255,255,255,.2); color: #fff; border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+#vorschlaege { display: flex; gap: 8px; overflow-x: auto; }
+#vorschlaege:empty { display: none; }
+.vschlag { flex: none; width: 150px; border: 0; padding: 0; border-radius: 8px; overflow: hidden; cursor: pointer; background: #fff; position: relative; }
+.vschlag img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.vschlag span { position: absolute; left: 4px; top: 4px; background: rgba(0,0,0,.65); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 5px; }
+.vschlag:hover { outline: 3px solid #fff; }
 
 /* ---------- Startfläche ---------- */
 #start { max-width: 760px; margin: 40px auto; padding: 0 16px; }
@@ -152,7 +159,7 @@ dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-hei
   <button class="btn primary" id="bExport" disabled><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Speichern</button>
 </div>
 
-<div id="hinweis"><span id="hinweisText"></span><button id="bAbbrechen">Abbrechen</button></div>
+<div id="hinweis"><div class="hzeile"><span id="hinweisText"></span><button id="bAbbrechen">Abbrechen</button></div><div id="vorschlaege"></div></div>
 
 <section id="start">
   <div id="drop">
@@ -335,7 +342,7 @@ async function fotoLesen(datei) {
   bild.close();
   const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.82));
   return {
-    id: naechsteId++, datei, anzeige, name: datei.name, ordner,
+    id: naechsteId++, datei, anzeige, name: datei.name, ordner, quelle: quelleAusName(datei.name),
     exif, nameZeit: zeitAusName(datei.name), dateiZeit: datei.lastModified || null,
     zeit: null, thumb: URL.createObjectURL(blob), thumbBlob: blob, breit: c.width, hoch: c.height, merk,
   };
@@ -482,6 +489,9 @@ function datumLesen(s) {
   if (!m || m[1] === '0000') return null;
   return new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
 }
+// Welches Gerät / welcher Weg? Ziffern im Namen neutralisieren: "IMG-########-WA####.jpg",
+// "########_#########_iOS.heic", "########_######.jpg" ... = verschiedene Handys bzw. WhatsApp.
+function quelleAusName(name) { return name.replace(/\d/g, '#').replace(/\.[^.]+$/, (e) => e.toLowerCase()); }
 function zeitAusName(name) {
   // z.B. 20260930_143012.jpg, IMG_20260930_143012.jpg, PXL_20260930_143012345.jpg
   const m = name.match(/(20\d{2})[-_]?(\d{2})[-_]?(\d{2})[-_ T]?(\d{2})[-_.]?(\d{2})[-_.]?(\d{2})/);
@@ -490,18 +500,21 @@ function zeitAusName(name) {
 }
 
 function zeitenFestlegen() {
-  const n = fotos.length;
-  const anteil = (k) => fotos.filter((f) => f[k] != null).length / n;
-  const dateiZeiten = new Set(fotos.map((f) => f.dateiZeit));
-  if (anteil('exif') >= 0.6) { zeitQuelle = 'Aufnahmezeit im Foto'; fotos.forEach((f) => (f.zeit = f.exif ?? f.nameZeit)); }
-  else if (anteil('nameZeit') >= 0.6) { zeitQuelle = 'Zeit im Dateinamen'; fotos.forEach((f) => (f.zeit = f.nameZeit ?? f.exif)); }
-  else if (dateiZeiten.size >= n * 0.9 && n > 1) { zeitQuelle = 'Datei-Änderungsdatum (unsicher)'; fotos.forEach((f) => (f.zeit = f.dateiZeit)); }
-  else { zeitQuelle = ''; fotos.forEach((f) => (f.zeit = null)); }
+  // Jedes Foto einzeln: Aufnahmezeit im Foto, sonst Zeit im Dateinamen. Fotos ohne beides
+  // (z.B. über WhatsApp verschickt) haben keine Zeit und werden nur optisch zugeordnet.
+  fotos.forEach((f) => (f.zeit = f.exif ?? f.nameZeit ?? null));
+  const mitZeit = fotos.filter((f) => f.zeit != null).length;
+  if (!mitZeit && new Set(fotos.map((f) => f.dateiZeit)).size >= fotos.length * 0.9 && fotos.length > 1) {
+    fotos.forEach((f) => (f.zeit = f.dateiZeit));
+    zeitQuelle = 'Datei-Änderungsdatum (unsicher)';
+  } else if (!mitZeit) zeitQuelle = '';
+  else zeitQuelle = mitZeit === fotos.length ? 'Aufnahmezeit' : `Aufnahmezeit (${fotos.length - mitZeit} Fotos ohne Zeit, z.B. WhatsApp)`;
 
   const namen = (a, b) => a.ordner.localeCompare(b.ordner) || a.name.localeCompare(b.name, 'de', { numeric: true });
   fotos.sort((a, b) => {
     if (a.ordner !== b.ordner) return namen(a, b);
-    if (a.zeit != null && b.zeit != null && a.zeit !== b.zeit) return a.zeit - b.zeit;
+    if ((a.zeit == null) !== (b.zeit == null)) return a.zeit == null ? 1 : -1;   // erst Fotos mit Zeit, dann ohne
+    if (a.zeit != null && a.zeit !== b.zeit) return a.zeit - b.zeit;
     return namen(a, b);
   });
   fotos.forEach((f, i) => (f.pos = i));
@@ -616,6 +629,7 @@ function vergleich(a, b) {
    Verschmutzt oder sauber? (Bilderkennung, lib/ki.js)
    ===================================================================== */
 let kiFehler = '';
+let kandidaten = [];   // alle möglichen Vorher->Nachher-Kombinationen mit Punkten (für Vorschläge)
 async function verschmutzungErkennen() {
   kiFehler = '';
   $('#fText').textContent = 'Erkennung wird geladen … (nur beim ersten Mal ca. 45 MB)';
@@ -675,7 +689,7 @@ function zuordnen() {
     if (a.ki && b.ki) { let k = 0; for (let x = 0; x < a.ki.length; x++) k += a.ki[x] * b.ki[x]; v.ki = k; } else v.ki = 0;
     kand.push({ a, b, ...v });
   }
-  if (!kand.length) { paare = []; geaendert = false; return; }
+  if (!kand.length) { paare = []; kandidaten = []; geaendert = false; return; }
 
   // In Standardwerte umrechnen (wie stark hebt sich ein Paar vom Durchschnitt ab?)
   const std = (k) => {
@@ -702,12 +716,14 @@ function zuordnen() {
         // Küche: Nachher-Runde meist in ähnlicher Reihenfolge wie Vorher-Runde
         p += Math.max(-0.4, 0.4 - 1.2 * Math.abs(a.phaseRel - b.phaseRel));
       }
-    } else if (!mitZeit && direkt) p += 0.5;
+    } else if (a.zeit == null && b.zeit == null && direkt) p += 0.5;
     if (a.merk.quer !== b.merk.quer) p -= 1.0;
+    if (a.quelle !== b.quelle) p -= 1.2;  // Vorher und Nachher macht meist dieselbe Person mit demselben Handy
     c.punkte = p;
   }
 
   kand.sort((x, y) => y.punkte - x.punkte);
+  kandidaten = kand;
   // Rang: Wie gut passt b für a im Vergleich zu den anderen Möglichkeiten von a (und umgekehrt)?
   const rangA = {}, rangB = {};
   for (const c of kand) {
@@ -876,12 +892,45 @@ function hinweisAktualisieren() {
   const an = auswahl !== null;
   $('#hinweis').classList.toggle('an', an);
   $('#inhalt').classList.toggle('waehlend', an);
-  if (!an) return;
-  $('#hinweisText').textContent = platz(auswahl)
-    ? 'Foto gewählt. Jetzt das Foto antippen, mit dem es den Platz tauschen soll (im selben Paar: Vorher/Nachher tauschen).'
-    : 'Foto gewählt. Jetzt ein zweites Foto ohne Partner antippen = neues Paar, oder ein Foto in einem Paar = ersetzen.';
+  if (!an) { $('#vorschlaege').innerHTML = ''; return; }
+  const vs = vorschlaegeFuer(auswahl);
+  $('#hinweisText').textContent = (vs.length ? 'Passt eines dieser Fotos? Antippen = Paar. ' : '') + (platz(auswahl)
+    ? 'Oder ein Foto antippen, mit dem es den Platz tauschen soll.'
+    : 'Oder ein zweites Foto antippen = neues Paar / ersetzen.');
+  $('#vorschlaege').innerHTML = vs.map((v, i) =>
+    `<button class="vschlag" data-vorschlag="${v.f.id}"><img src="${v.f.thumb}" alt=""><span>${i + 1}. ${v.frei ? 'ohne Partner' : 'in Paar'}</span></button>`).join('');
 }
 $('#bAbbrechen').onclick = () => { auswahl = null; darstellen(); };
+
+// Die besten Partner-Vorschläge für ein Foto (verschmutzt -> saubere Fotos und umgekehrt)
+function vorschlaegeFuer(id) {
+  const f = fotoNachId.get(id), jetzt = platz(id), partner = jetzt && jetzt.p[jetzt.rolle === 'vorher' ? 'nachher' : 'vorher'];
+  const imPaar = new Set(paare.flatMap((p) => [p.vorher, p.nachher]));
+  const liste = [];
+  for (const c of kandidaten) {
+    const anderer = c.a.id === id ? c.b : c.b.id === id ? c.a : null;
+    if (!anderer || anderer.id === partner) continue;
+    liste.push({ f: anderer, frei: !imPaar.has(anderer.id) });
+    if (liste.length >= 6) break;
+  }
+  // Fotos ohne Partner zuerst (gleiche Reihenfolge nach Punkten)
+  return f ? [...liste.filter((v) => v.frei), ...liste.filter((v) => !v.frei)] : [];
+}
+$('#vorschlaege').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-vorschlag]');
+  if (!b || auswahl === null) return;
+  const x = auswahl, y = +b.dataset.vorschlag;
+  const py = platz(y);
+  if (py) paare = paare.filter((p) => p !== py.p);   // aus altem Paar lösen, der alte Partner geht nach unten
+  const px = platz(x);
+  if (px) paare = paare.filter((p) => p !== px.p);
+  const fx = fotoNachId.get(x), fy = fotoNachId.get(y);
+  const [v, n] = fx.klasse === 'dreckig' ? [fx, fy] : [fy, fx];
+  paare.push({ id: naechsteId++, vorher: v.id, nachher: n.id, titel: '', status: 'hand' });
+  sortierePaare();
+  auswahl = null; geaendert = true;
+  darstellen();
+});
 
 $('#bNeu').onclick = () => {
   if (geaendert && !confirm('Deine Korrekturen und Bezeichnungen gehen verloren. Neu zuordnen?')) return;
