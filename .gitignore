@@ -4,6 +4,7 @@
 *.png
 !icons/*.png
 *.heic
+*.HEIC
 *.pdf
 *.zip
 test/

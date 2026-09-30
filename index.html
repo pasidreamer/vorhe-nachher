@@ -290,7 +290,7 @@ async function laden(dateien) {
       const datei = liste.shift();
       try { neu.push(await fotoLesen(datei)); } catch (err) { fehler.push(datei.name); }
       fertig++;
-      $('#fText').textContent = `Fotos werden gelesen … ${fertig} / ${dateien.length}`;
+      $('#fText').textContent = `Fotos werden gelesen … ${fertig} / ${dateien.length}` + (heicBibliothek ? ' (iPhone-Fotos werden umgewandelt, das dauert etwas)' : '');
       $('#fBalken').style.width = (100 * fertig / dateien.length) + '%';
     }
   }
@@ -309,7 +309,15 @@ async function laden(dateien) {
 async function fotoLesen(datei) {
   const pfad = datei.pfad || datei.webkitRelativePath || datei.name;
   const ordner = pfad.includes('/') ? pfad.slice(0, pfad.lastIndexOf('/')) : '';
-  const [exif, bild] = await Promise.all([exifZeit(datei).catch(() => null), createImageBitmap(datei, { resizeWidth: 480, resizeQuality: 'medium' })]);
+  const exif = await exifZeit(datei).catch(() => null);
+  let bild, anzeige = null;
+  try { bild = await createImageBitmap(datei, { resizeWidth: 480, resizeQuality: 'medium' }); }
+  catch (err) {
+    if (!(await istHeic(datei))) throw err;
+    // HEIC (iPhone): Browser kann es nicht selbst -> auf dem Gerät in JPG umwandeln
+    anzeige = await heicUmwandeln(datei);
+    bild = await createImageBitmap(anzeige, { resizeWidth: 480, resizeQuality: 'medium' });
+  }
   const c = document.createElement('canvas');
   c.width = bild.width; c.height = bild.height;
   c.getContext('2d').drawImage(bild, 0, 0);
@@ -317,16 +325,114 @@ async function fotoLesen(datei) {
   bild.close();
   const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.82));
   return {
-    id: naechsteId++, datei, name: datei.name, ordner,
+    id: naechsteId++, datei, anzeige, name: datei.name, ordner,
     exif, nameZeit: zeitAusName(datei.name), dateiZeit: datei.lastModified || null,
     zeit: null, thumb: URL.createObjectURL(blob), breit: c.width, hoch: c.height, merk,
   };
+}
+
+/* ---------- HEIC (iPhone-Fotos) ---------- */
+let heicBibliothek = null;
+function heicLaden() {
+  // grosse Bibliothek (3 MB) erst laden, wenn wirklich HEIC-Fotos dabei sind
+  heicBibliothek = heicBibliothek || new Promise((ok, nein) => {
+    const s = document.createElement('script');
+    s.src = 'lib/heic-to.js';
+    s.onload = () => ok(window.HeicTo);
+    s.onerror = () => { heicBibliothek = null; nein(new Error('HEIC-Umwandler nicht geladen')); };
+    document.head.appendChild(s);
+  });
+  return heicBibliothek;
+}
+async function istHeic(datei) {
+  if (/\.(heic|heif)$/i.test(datei.name) || /hei[cf]/i.test(datei.type)) return true;
+  const kopf = new Uint8Array(await datei.slice(4, 12).arrayBuffer());
+  const typ = String.fromCharCode(...kopf);
+  return typ.startsWith('ftyp') && /hei|mif|msf|hev/.test(typ.slice(4));
+}
+let heicWarteschlange = Promise.resolve();
+function heicUmwandeln(datei) {
+  // nacheinander, sonst wird der Speicher knapp
+  const auftrag = heicWarteschlange.then(async () => {
+    const HeicTo = await heicLaden();
+    // direkt als Bild (ohne Zwischen-JPG), dann auf 2000 px verkleinern: reicht für Ansicht und PDF
+    const bild = await HeicTo({ blob: datei, type: 'bitmap' });
+    const m = Math.min(1, 2000 / Math.max(bild.width, bild.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bild.width * m); c.height = Math.round(bild.height * m);
+    c.getContext('2d').drawImage(bild, 0, 0, c.width, c.height);
+    bild.close();
+    return new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.88));
+  });
+  heicWarteschlange = auftrag.catch(() => {});
+  return auftrag;
+}
+
+// EXIF steckt in HEIC als eigenes "Exif"-Element (ISO-BMFF: meta > iinf/iloc)
+async function heicExif(datei) {
+  const puffer = await datei.slice(0, 512 * 1024).arrayBuffer();
+  const v = new DataView(puffer);
+  const typ = (o) => String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3));
+  const boxen = (start, ende, cb) => {
+    let p = start;
+    while (p + 8 <= ende) {
+      let groesse = v.getUint32(p), kopf = 8;
+      if (groesse === 1) { groesse = Number(v.getBigUint64(p + 8)); kopf = 16; }
+      else if (groesse === 0) groesse = ende - p;
+      if (groesse < kopf) return;
+      cb(typ(p + 4), p + kopf, Math.min(p + groesse, ende));
+      p += groesse;
+    }
+  };
+  const zahl = (p, n) => (n === 0 ? 0 : n === 2 ? v.getUint16(p) : n === 4 ? v.getUint32(p) : n === 8 ? Number(v.getBigUint64(p)) : 0);
+  let exifId = null, ort = null;
+  boxen(0, v.byteLength, (t, a, e) => {
+    if (t !== 'meta') return;
+    boxen(a + 4, e, (t2, a2, e2) => {
+      if (t2 === 'iinf') {
+        const ver = v.getUint8(a2);
+        boxen(a2 + 4 + (ver === 0 ? 2 : 4), e2, (t3, a3) => {
+          if (t3 !== 'infe') return;
+          const iv = v.getUint8(a3);
+          if (iv < 2) return;
+          const id = iv === 2 ? v.getUint16(a3 + 4) : v.getUint32(a3 + 4);
+          const q = a3 + 4 + (iv === 2 ? 2 : 4) + 2;
+          if (typ(q) === 'Exif') exifId = id;
+        });
+      }
+      if (t2 === 'iloc') ort = a2;
+    });
+  });
+  if (exifId == null || ort == null) return null;
+  const ver = v.getUint8(ort);
+  let p = ort + 4;
+  const offGr = v.getUint8(p) >> 4, lenGr = v.getUint8(p) & 15, basisGr = v.getUint8(p + 1) >> 4, indexGr = ver > 0 ? v.getUint8(p + 1) & 15 : 0;
+  p += 2;
+  const anzahl = ver < 2 ? v.getUint16(p) : v.getUint32(p); p += ver < 2 ? 2 : 4;
+  for (let i = 0; i < anzahl; i++) {
+    const id = ver < 2 ? v.getUint16(p) : v.getUint32(p); p += ver < 2 ? 2 : 4;
+    if (ver > 0) p += 2;
+    p += 2;
+    const basis = zahl(p, basisGr); p += basisGr;
+    const ausdehnungen = v.getUint16(p); p += 2;
+    for (let k = 0; k < ausdehnungen; k++) {
+      p += indexGr;
+      const off = zahl(p, offGr); p += offGr;
+      p += lenGr;
+      if (id === exifId && k === 0) {
+        const daten = new DataView(await datei.slice(basis + off, basis + off + 128 * 1024).arrayBuffer());
+        return tiffZeit(daten, 4 + daten.getUint32(0));
+      }
+    }
+  }
+  return null;
 }
 
 /* ---------- Aufnahmezeit aus EXIF (JPEG) ---------- */
 async function exifZeit(datei) {
   const puffer = await datei.slice(0, 256 * 1024).arrayBuffer();
   const v = new DataView(puffer);
+  if (v.byteLength >= 12 && String.fromCharCode(v.getUint8(4), v.getUint8(5), v.getUint8(6), v.getUint8(7)) === 'ftyp') return heicExif(datei);
   if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return null;
   let p = 2;
   while (p + 10 < v.byteLength) {
@@ -625,7 +731,7 @@ function darstellen() {
   }).join('') || '<div class="leer">Noch keine Paare. Tippe zwei Fotos unten nacheinander an, um ein Paar zu bilden – oder schiebe den Regler Richtung „mehr Paare“ und tippe „Neu zuordnen“.</div>';
 
   $('#pool').innerHTML = pool.map((f) => fotoHtml(f, '')).join('') || '<div class="leer">Alle Fotos sind einem Paar zugeordnet.</div>';
-  $('#fehler').textContent = fehler.length ? `Nicht lesbar (${fehler.length}): ${fehler.join(', ')} – z.B. HEIC-Fotos: am Handy unter Kamera-Formate „Maximale Kompatibilität“ (JPG) wählen.` : '';
+  $('#fehler').textContent = fehler.length ? `Nicht lesbar (${fehler.length}): ${fehler.join(', ')} – Datei beschädigt oder Format unbekannt.` : '';
   hinweisAktualisieren();
 }
 
@@ -704,7 +810,7 @@ function grossOeffnen(i) {
   grossIndex = i;
   grossUrls.splice(0).forEach((u) => URL.revokeObjectURL(u));
   const p = paare[i], a = fotoNachId.get(p.vorher), b = fotoNachId.get(p.nachher);
-  const ua = URL.createObjectURL(a.datei), ub = URL.createObjectURL(b.datei);
+  const ua = URL.createObjectURL(a.anzeige || a.datei), ub = URL.createObjectURL(b.anzeige || b.datei);
   grossUrls.push(ua, ub);
   $('#gA').src = ua; $('#gB').src = ub;
   $('#gA').onerror = () => ($('#gA').src = a.thumb);
@@ -811,7 +917,7 @@ async function jpegFuerPdf(f) {
   const lang = 1500;
   const opt = f.merk.quer ? { resizeWidth: lang } : { resizeHeight: lang };
   let bild;
-  try { bild = await createImageBitmap(f.datei, { ...opt, resizeQuality: 'high' }); }
+  try { bild = await createImageBitmap(f.anzeige || f.datei, { ...opt, resizeQuality: 'high' }); }
   catch { bild = await createImageBitmap(await (await fetch(f.thumb)).blob()); }
   const c = document.createElement('canvas');
   c.width = bild.width; c.height = bild.height;
