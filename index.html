@@ -148,6 +148,18 @@ dialog h3 { margin: 0 0 14px; }
 dialog label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
 dialog input[type=text], dialog input[type=date] { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font: inherit; }
 dialog .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+#bezMenu { position: fixed; z-index: 40; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  padding: 6px; display: flex; flex-wrap: wrap; gap: 6px; max-width: min(520px, calc(100vw - 16px)); max-height: 240px; overflow-y: auto; }
+#bezMenu[hidden] { display: none; }
+#bezMenu button { border: 1px solid var(--line); background: #f4f6f8; border-radius: 8px; padding: 7px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+#bezMenu button:hover { background: var(--accent-soft); border-color: var(--accent); }
+#bezMenu button.bearbeiten { background: #fff; color: var(--accent); border-style: dashed; }
+.bezNeu { display: flex; gap: 8px; margin: 12px 0; }
+.bezNeu input { flex: 1; }
+#bezListe { display: flex; flex-wrap: wrap; gap: 6px; max-height: 300px; overflow-y: auto; }
+#bezListe span { display: inline-flex; align-items: center; gap: 4px; background: #f4f6f8; border: 1px solid var(--line); border-radius: 8px; padding: 5px 4px 5px 10px; font-size: 14px; }
+#bezListe button { border: 0; background: transparent; color: var(--danger); font-size: 16px; cursor: pointer; padding: 0 6px; border-radius: 6px; }
+#bezListe button:hover { background: #fdecec; }
 dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
 #exportStatus { font-size: 13px; color: var(--accent); margin-top: 10px; min-height: 18px; }
 
@@ -169,6 +181,7 @@ dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-hei
   <button class="btn" id="bFotos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>Fotos<span class="lang">&nbsp;wählen</span></button>
   <button class="btn" id="bInstall" hidden><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 8v7M9 12l3 3 3-3"/></svg>Als App installieren</button>
   <div class="spacer"></div>
+  <button class="btn" id="bBez" title="Vorschläge für die Beschriftung der Paare bearbeiten"><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h7"/><path d="M17 15l3 3-3 3"/></svg>Bezeichnungen</button>
   <div class="strenge" id="strengeBox" hidden>
     <span>mehr Vorschläge</span><input type="range" id="strenge" min="-1" max="2.6" step="0.1" value="0"><span>nur sichere</span>
   </div>
@@ -255,12 +268,24 @@ dialog .klein { font-size: 12px; color: var(--muted); margin-top: 12px; line-hei
     <input type="text" id="eTitel" value="Lüftungsreinigung – Vorher / Nachher">
     <label for="eObjekt">Objekt / Kunde</label>
     <input type="text" id="eObjekt" placeholder="z.B. Primarschule Lengnau">
-    <label for="eDatum">Datum</label>
+    <label for="eDatum">Datum im Bericht (leer lassen = kein Datum)</label>
     <input type="date" id="eDatum">
   </details>
 </dialog>
 
-<datalist id="bezeichnungen"></datalist>
+<div id="bezMenu" hidden></div>
+<dialog id="dBez">
+  <h3>Bezeichnungen</h3>
+  <div class="klein" style="margin-top:0">Diese Vorschläge erscheinen, wenn du ins Bezeichnungsfeld eines Paars tippst.
+    Die Liste ändert sich nur, wenn du hier etwas hinzufügst oder löschst.</div>
+  <div class="bezNeu"><input type="text" id="bezEingabe" placeholder="Neue Bezeichnung, z.B. Abluftsammelkanal"><button class="btn primary" id="bezPlus">Hinzufügen</button></div>
+  <div id="bezListe"></div>
+  <div class="knoepfe">
+    <button class="btn" id="bezStandard">Standardliste wiederherstellen</button>
+    <div class="spacer"></div>
+    <button class="btn" id="bezZu">Fertig</button>
+  </div>
+</dialog>
 <input type="file" id="iOrdner" webkitdirectory multiple hidden>
 <input type="file" id="iFotos" accept="image/*,.heic,.heif" multiple hidden>
 
@@ -867,7 +892,7 @@ function darstellen() {
         <span class="nr">${i + 1}</span>
         ${nurAuswahl ? `<button class="ikon" data-aktion="hoch" title="Nach vorne"${i ? '' : ' disabled'}><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button class="ikon" data-aktion="runter" title="Nach hinten"${i < liste.length - 1 ? '' : ' disabled'}><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>` : ''}
         <button class="stern${p.gewaehlt ? ' an' : ''}" data-aktion="waehlen" title="Dieses Paar kommt in den Vorher-Nachher-Ordner für den Kunden"><svg viewBox="0 0 24 24"><path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4l-5.6 2.9 1.1-6.2L3 9.7l6.2-.9z"/></svg>${p.gewaehlt ? 'Für Kunden' : 'Auswählen'}</button>
-        <input class="titel" value="${esc(p.titel)}" placeholder="Bezeichnung, z.B. Abluftkanal" list="bezeichnungen" data-titel="${p.id}">
+        <input class="titel" value="${esc(p.titel)}" placeholder="Bezeichnung, z.B. Abluftkanal" autocomplete="off" data-titel="${p.id}">
         <span class="badge ${p.status}">${badge}</span>
         <button class="ikon" data-aktion="gross" title="Gross vergleichen">${SVG.gross}</button>
         <button class="ikon" data-aktion="tauschen" title="Vorher/Nachher tauschen">${SVG.tauschen}</button>
@@ -975,22 +1000,75 @@ function ausgewaehlte() { return paare.filter((p) => p.gewaehlt).sort((a, b) => 
 $('#fAlle').onclick = () => { nurAuswahl = false; darstellen(); };
 $('#fAuswahl').onclick = () => { nurAuswahl = true; darstellen(); };
 
-// Bezeichnungen: feste Vorschläge + selbst eingetippte (auf diesem Gerät gemerkt)
-const BEZEICHNUNGEN = ['Küchenhaube', 'Abluftkanal', 'Zuluftkanal', 'Aussenluftkanal', 'Fortluftkanal', 'Abluftsammelkanal',
-  'Abluftgitter', 'Zuluftgitter', 'Monoblock', 'Ventilator', 'Wärmetauscher', 'Filterkammer', 'Brandschutzklappe', 'Flexrohr',
-  'Wickelfalzrohr', 'Schalldämpfer', 'Tellerventil', 'Dachventilator', 'Fettfilter'];
-function eigeneBezeichnungen() { try { return JSON.parse(localStorage.getItem('vn-bezeichnungen') || '[]'); } catch { return []; } }
-function bezeichnungenFuellen() {
-  const alle = [...new Set([...BEZEICHNUNGEN, ...eigeneBezeichnungen()])];
-  $('#bezeichnungen').innerHTML = alle.map((b) => `<option value="${esc(b)}">`).join('');
+// Bezeichnungen: Vorschlagsliste, die NUR von Hand geändert wird (Dialog „Bezeichnungen“).
+// Nichts wird automatisch gemerkt, damit sich keine Tippfehler einschleichen.
+const BEZ_STANDARD = ['Küchenhaube', 'Abluftkanal', 'Zuluftkanal', 'Aussenluftkanal', 'Fortluftkanal', 'Abluftsammelkanal',
+  'Abluftgitter', 'Zuluftgitter', 'Monoblock', 'Ventilator'];
+function bezLaden() {
+  try { const l = JSON.parse(localStorage.getItem('vn-bezeichnungen-liste')); if (Array.isArray(l)) return l; } catch {}
+  return BEZ_STANDARD.slice();
 }
-$('#inhalt').addEventListener('change', (e) => {
-  const t = e.target.dataset && e.target.dataset.titel && e.target.value.trim();
-  if (!t || BEZEICHNUNGEN.includes(t)) return;
-  try { localStorage.setItem('vn-bezeichnungen', JSON.stringify([...new Set([t, ...eigeneBezeichnungen()])].slice(0, 40))); } catch {}
-  bezeichnungenFuellen();
+function bezSpeichern(l) { try { localStorage.setItem('vn-bezeichnungen-liste', JSON.stringify(l)); } catch {} }
+
+// Vorschlags-Menü unter dem Bezeichnungsfeld
+const bezMenu = $('#bezMenu');
+let bezFeld = null;
+function bezMenuZeigen(feld) {
+  bezFeld = feld;
+  const such = feld.value.trim().toLowerCase();
+  const alle = bezLaden();
+  const treffer = alle.filter((b) => b.toLowerCase().includes(such) && b.toLowerCase() !== such);
+  bezMenu.innerHTML = (treffer.length ? treffer : alle).map((b) => `<button data-bez="${esc(b)}">${esc(b)}</button>`).join('') +
+    '<button class="bearbeiten" data-bez-bearbeiten>✎ Liste bearbeiten</button>';
+  bezMenu.hidden = false;
+  const k = feld.getBoundingClientRect();
+  bezMenu.style.left = Math.max(8, Math.min(k.left, innerWidth - bezMenu.offsetWidth - 8)) + 'px';
+  const unten = k.bottom + 4;
+  bezMenu.style.top = (unten + bezMenu.offsetHeight > innerHeight ? Math.max(8, k.top - bezMenu.offsetHeight - 4) : unten) + 'px';
+}
+function bezMenuZu() { bezMenu.hidden = true; bezFeld = null; }
+document.addEventListener('focusin', (e) => { if (e.target.dataset && e.target.dataset.titel) bezMenuZeigen(e.target); });
+document.addEventListener('focusout', (e) => { if (e.target === bezFeld) setTimeout(() => { if (document.activeElement !== bezFeld) bezMenuZu(); }, 150); });
+$('#inhalt').addEventListener('input', (e) => { if (e.target === bezFeld) bezMenuZeigen(e.target); });
+window.addEventListener('scroll', () => { if (bezFeld) bezMenuZeigen(bezFeld); }, true);
+bezMenu.addEventListener('mousedown', (e) => e.preventDefault());   // Feld behält den Fokus
+bezMenu.addEventListener('click', (e) => {
+  if (e.target.closest('[data-bez-bearbeiten]')) { bezMenuZu(); bezDialog(); return; }
+  const b = e.target.closest('[data-bez]');
+  if (!b || !bezFeld) return;
+  bezFeld.value = b.dataset.bez;
+  const paar = paare.find((x) => x.id === +bezFeld.dataset.titel);
+  if (paar) { paar.titel = b.dataset.bez; geaendert = true; }
+  bezFeld.blur();
+  bezMenuZu();
 });
-bezeichnungenFuellen();
+
+// Dialog: Liste von Hand pflegen
+function bezDialog() {
+  const zeichnen = () => {
+    $('#bezListe').innerHTML = bezLaden().map((b, i) => `<span>${esc(b)}<button data-weg="${i}" title="Löschen">✕</button></span>`).join('') ||
+      '<div class="klein">Noch keine Bezeichnungen.</div>';
+  };
+  const dazu = () => {
+    const t = $('#bezEingabe').value.trim().replace(/\s+/g, ' ');
+    if (!t) return;
+    const l = bezLaden();
+    if (!l.some((b) => b.toLowerCase() === t.toLowerCase())) { l.push(t); bezSpeichern(l); }
+    $('#bezEingabe').value = ''; zeichnen(); $('#bezEingabe').focus();
+  };
+  $('#bezPlus').onclick = dazu;
+  $('#bezEingabe').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); dazu(); } };
+  $('#bezListe').onclick = (e) => {
+    const w = e.target.closest('[data-weg]');
+    if (!w) return;
+    const l = bezLaden(); l.splice(+w.dataset.weg, 1); bezSpeichern(l); zeichnen();
+  };
+  $('#bezStandard').onclick = () => { if (confirm('Deine Liste durch die Standardliste ersetzen?')) { bezSpeichern(BEZ_STANDARD.slice()); zeichnen(); } };
+  $('#bezZu').onclick = () => $('#dBez').close();
+  zeichnen();
+  $('#dBez').showModal();
+}
+$('#bBez').onclick = bezDialog;
 
 // Die besten Partner-Vorschläge für ein Foto (verschmutzt -> saubere Fotos und umgekehrt)
 function vorschlaegeFuer(id) {
@@ -1063,11 +1141,6 @@ document.addEventListener('keydown', (e) => {
    Speichern
    ===================================================================== */
 $('#bExport').onclick = () => {
-  if (!$('#eDatum').value) {
-    const t = fotos.find((f) => f.zeit != null);
-    const d = t ? new Date(t.zeit) : new Date();
-    $('#eDatum').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
   const nAus = paare.filter((p) => p.gewaehlt).length;
   $('#dAuswahl').textContent = nAus; $('#dAlle').textContent = paare.length;
   $('#uAuswahl').disabled = !nAus;
@@ -1215,9 +1288,7 @@ $('#bPdf').onclick = async () => {
       const boxOben = y0 - 42, boxH = zeileH - 52;
       for (const [k, f, wort, farbe] of [[0, fa, 'VORHER', farbeV], [1, fb, 'NACHHER', farbeN]]) {
         const x = M + k * (spalteW + LUECKE);
-        const zeit = f.zeit != null ? '  ' + uhr(f.zeit) : '';
         seite.drawText(wort, { x, y: y0 - 32, size: 9, font: fett, color: farbe });
-        seite.drawText(pdfText(zeit), { x: x + fett.widthOfTextAtSize(wort, 9), y: y0 - 32, size: 9, font: schrift, color: grau });
         const bild = await doc.embedJpg(await jpegFuerPdf(f));
         const mass = Math.min(spalteW / bild.width, boxH / bild.height);
         const bw = bild.width * mass, bh = bild.height * mass;
